@@ -118,8 +118,8 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
 
     if dry_run:
         logger.info("--- DRY RUN — Vehicle statuses ---")
-        logger.info(f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENGINE':<10}  {'VOLTAGE':>8}  LOKASI")
-        logger.info(f"  {'-'*20}  {'-'*15}  {'-'*10}  {'-'*8}  {'-'*30}")
+        logger.info(f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENGINE':<6}  {'VOLTAGE':>7}  {'LAT':>9}  {'LNG':>10}  LOKASI")
+        logger.info(f"  {'-'*20}  {'-'*15}  {'-'*6}  {'-'*7}  {'-'*9}  {'-'*10}  {'-'*25}")
         for nopol, rec in nopol_index.items():
             prev = vehicle_state.get(nopol)
             status = status_index.get(nopol, "?")
@@ -131,7 +131,10 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
                 from state.tracker import haversine_km
                 dist = haversine_km(prev["lat"], prev["lng"], rec.lat, rec.lng)
                 moved_marker = f" ({dist:.2f}km)"
-            logger.info(f"  {nopol:<20}  {status:<15}  {engine:<10}  {voltage_v:>7.2f}V  {lokasi}{moved_marker}")
+            logger.info(
+                f"  {nopol:<20}  {status:<15}  {engine:<6}  {voltage_v:>6.2f}V"
+                f"  {rec.lat:>9.4f}  {rec.lng:>10.4f}  {lokasi}{moved_marker}"
+            )
         logger.info("--- DRY RUN complete — no sheet updated ---")
         # Still update state so next dry run has correct prev positions
         for nopol, rec in nopol_index.items():
