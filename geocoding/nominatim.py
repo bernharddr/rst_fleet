@@ -43,11 +43,12 @@ class NominatimGeocoder:
     @lru_cache(maxsize=512)
     def _cached_geocode(self, lat: float, lng: float) -> str:
         self._throttle()
+        # zoom=12 gives city/district level — better for moving trucks on highways
         params = {
             "lat": lat,
             "lon": lng,
             "format": "json",
-            "zoom": 14,
+            "zoom": 12,
             "addressdetails": 1,
         }
         try:
@@ -58,22 +59,42 @@ class NominatimGeocoder:
                 timeout=15,
             )
             resp.raise_for_status()
-            address = resp.json().get("address", {})
-            return self._extract_location_name(address)
+            data = resp.json()
+            address = data.get("address", {})
+            display_name = data.get("display_name", "")
+            return self._extract_location_name(address, display_name)
         except Exception as e:
             logger.warning(f"OSM geocoding failed for ({lat},{lng}): {e}")
             return "LOKASI TIDAK DIKETAHUI"
 
-    def _extract_location_name(self, address: dict) -> str:
+    def _extract_location_name(self, address: dict, display_name: str = "") -> str:
+        # Check known terminals/depots first
         full_text = " ".join(str(v).lower() for v in address.values())
         for keyword, canonical in KNOWN_LOCATIONS.items():
             if keyword in full_text:
                 return canonical
-        for key in ("amenity", "building", "suburb", "neighbourhood",
-                    "city_district", "city", "town", "village", "county"):
-            val = address.get(key, "")
-            if val:
+
+        # Indonesian address priority — broadest useful level first
+        # Typical Nominatim keys for Indonesia:
+        #   village/kelurahan → suburb → city_district/kecamatan → city/kabupaten → county
+        for key in (
+            "amenity", "building",
+            "suburb", "village", "town",
+            "city_district", "neighbourhood",
+            "city", "county", "state_district",
+        ):
+            val = address.get(key, "").strip()
+            if val and val.lower() not in ("indonesia",):
                 return val.upper()
+
+        # Last resort: extract second segment of display_name
+        # e.g. "Jl. Raya Serang, Cikande, Serang Regency, Banten, Java, Indonesia"
+        # → "CIKANDE"
+        if display_name:
+            parts = [p.strip() for p in display_name.split(",")]
+            if len(parts) >= 2:
+                return parts[1].upper()
+
         return "LOKASI TIDAK DIKETAHUI"
 
     def batch_geocode(

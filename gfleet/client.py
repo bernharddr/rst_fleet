@@ -110,10 +110,9 @@ class GFleetClient:
 
         Returns: "Jalan" | "Idle" | "Berhenti" | "GPS Missing"
         """
-        # No GPS signal
+        # No GPS signal — only check lat/lng, not status field
+        # (Teltonika status=0 does NOT mean offline, it's a different field)
         if record.lat == 0.0 and record.lng == 0.0:
-            return STATUS_GPS_MISSING
-        if record.status == 0:
             return STATUS_GPS_MISSING
 
         # Moving: speed > 0 OR displaced > 1 km from last position
@@ -131,4 +130,10 @@ class GFleetClient:
 
     @staticmethod
     def _normalize_nopol(raw: str) -> str:
-        return raw.strip().upper()
+        """
+        Normalize license plate, stripping driver name if appended.
+        e.g. "B 9973 TEJ (MADNUR)" → "B 9973 TEJ"
+        """
+        import re
+        clean = re.sub(r'\s*\(.*?\)', '', raw)  # remove (anything in parentheses)
+        return clean.strip().upper()
