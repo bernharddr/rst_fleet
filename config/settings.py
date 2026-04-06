@@ -21,6 +21,13 @@ GOOGLE_CREDENTIALS_PATH = os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials
 NOMINATIM_USER_AGENT = "fleet-tracker-moda/1.0"
 NOMINATIM_DELAY_SECONDS = 1.1
 
+# Engine detection via external voltage (in millivolts)
+# Trucks typically run on 24V systems:
+#   Engine OFF  → ~24000–25500 mV
+#   Engine ON   → ~26500–29000 mV (alternator charging)
+# Set ENGINE_ON_VOLTAGE_MV to the crossover threshold for your fleet.
+ENGINE_ON_VOLTAGE_MV = int(os.environ.get("ENGINE_ON_VOLTAGE_MV", 26000))
+
 # Column indices (0-based, relative to the NOPOL column in each data row)
 COL_NOPOL = 0
 COL_DRIVER = 1        # MANUAL — never written

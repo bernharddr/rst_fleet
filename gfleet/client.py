@@ -2,8 +2,9 @@ import logging
 from dataclasses import dataclass
 import requests
 
-from config.settings import GFLEET_BASE_URL, GFLEET_API_KEY
+from config.settings import GFLEET_BASE_URL, GFLEET_API_KEY, ENGINE_ON_VOLTAGE_MV
 from gfleet.auth import GFleetAuthenticator, GFleetAuthError
+from state.tracker import has_moved
 
 logger = logging.getLogger(__name__)
 
@@ -15,14 +16,22 @@ class GFleetAPIError(Exception):
 @dataclass
 class VehicleRecord:
     device_id: str
-    nopol: str        # vehicleLicense, normalized (stripped, uppercased)
+    nopol: str          # vehicleLicense, normalized (stripped, uppercased)
     lat: float
     lng: float
-    speed: float      # km/h
+    speed: float        # km/h
     odo: float
-    gps_time: str     # raw time string from API e.g. "2025-12-09T14:25:25.000Z"
-    status: int       # raw API status field (0 = offline, 1 = online)
+    gps_time: str       # raw time string from API e.g. "2025-12-09T14:25:25.000Z"
+    status: int         # raw API status (0 = offline, 1 = online)
     fleet: str
+    ext_voltage: int    # external voltage in millivolts (used for engine detection)
+
+
+# Status values written to the sheet
+STATUS_MOVING = "Jalan"           # moved > 1 km since last reading
+STATUS_IDLE = "Idle"              # stopped, engine ON (voltage high)
+STATUS_STOPPED = "Berhenti"       # stopped, engine OFF
+STATUS_GPS_MISSING = "GPS Missing"
 
 
 class GFleetClient:
@@ -70,6 +79,7 @@ class GFleetClient:
                     gps_time=str(item.get("time", "")),
                     status=int(item.get("status", 0)),
                     fleet=str(item.get("fleet", "")),
+                    ext_voltage=int(item.get("extVoltage", 0)),
                 )
                 records.append(rec)
             except (TypeError, ValueError) as e:
@@ -79,34 +89,45 @@ class GFleetClient:
         return records
 
     def build_nopol_index(self, records: list[VehicleRecord]) -> dict[str, VehicleRecord]:
-        """
-        Returns {normalized_nopol: VehicleRecord}.
-        On duplicates, keeps the record with the most recent gps_time.
-        """
+        """Returns {normalized_nopol: VehicleRecord}, keeping most recent on duplicates."""
         index: dict[str, VehicleRecord] = {}
         for rec in records:
-            if rec.nopol not in index:
+            if rec.nopol not in index or rec.gps_time > index[rec.nopol].gps_time:
                 index[rec.nopol] = rec
-            else:
-                existing = index[rec.nopol]
-                if rec.gps_time > existing.gps_time:
-                    index[rec.nopol] = rec
         return index
 
     @staticmethod
-    def derive_sheet_status(record: VehicleRecord) -> str:
+    def derive_sheet_status(record: VehicleRecord, prev_state: dict | None) -> str:
         """
-        Derives the STATUS value for the sheet from GPS data.
-        Returns one of: "Jalan", "Berhenti", "GPS Missing"
-        Note: "Antri" is never returned — it requires human judgment.
+        Derives STATUS for the sheet using three signals:
+
+        1. GPS validity  — lat/lng == 0 or device offline → GPS Missing
+        2. Movement      — haversine distance from last position > 1 km → Jalan
+        3. Engine state  — extVoltage > ENGINE_ON_VOLTAGE_MV → engine on → Idle
+                        — extVoltage ≤ ENGINE_ON_VOLTAGE_MV → engine off → Berhenti
+
+        Speed > 0 is also treated as moving (device reports speed directly).
+
+        Returns: "Jalan" | "Idle" | "Berhenti" | "GPS Missing"
         """
+        # No GPS signal
         if record.lat == 0.0 and record.lng == 0.0:
-            return "GPS Missing"
+            return STATUS_GPS_MISSING
         if record.status == 0:
-            return "GPS Missing"
-        if record.speed > 0:
-            return "Jalan"
-        return "Berhenti"
+            return STATUS_GPS_MISSING
+
+        # Moving: speed > 0 OR displaced > 1 km from last position
+        if record.speed > 0 or has_moved(prev_state, record.lat, record.lng):
+            return STATUS_MOVING
+
+        # Stopped — check engine via voltage
+        engine_on = record.ext_voltage > ENGINE_ON_VOLTAGE_MV
+        return STATUS_IDLE if engine_on else STATUS_STOPPED
+
+    @staticmethod
+    def engine_on(record: VehicleRecord) -> bool:
+        """True if the engine appears to be running based on external voltage."""
+        return record.ext_voltage > ENGINE_ON_VOLTAGE_MV
 
     @staticmethod
     def _normalize_nopol(raw: str) -> str:

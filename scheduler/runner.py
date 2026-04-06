@@ -32,7 +32,7 @@ def _safe_run() -> None:
         logger.exception(f"Update failed: {e}")
 
 
-def start_scheduler(interval_minutes: int = 30) -> None:
+def start_scheduler(interval_minutes: int = 15) -> None:
     schedule.every(interval_minutes).minutes.do(_safe_run)
 
     logger.info(f"Fleet tracker scheduler started — running every {interval_minutes} minutes.")
@@ -50,8 +50,8 @@ def start_scheduler(interval_minutes: int = 30) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fleet tracker scheduler")
     parser.add_argument(
-        "--interval", type=int, default=30,
-        help="How often to run in minutes (default: 30)"
+        "--interval", type=int, default=15,
+        help="How often to run in minutes (default: 15)"
     )
     args = parser.parse_args()
     start_scheduler(interval_minutes=args.interval)

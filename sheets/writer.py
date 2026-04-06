@@ -34,11 +34,13 @@ class SheetWriter:
         locator: SheetLocator,
         nopol_api_index: dict[str, VehicleRecord],
         location_index: dict[str, str],
+        status_index: dict[str, str],
         update_time_str: str,
         now: datetime,
     ) -> list[dict]:
         """
         Returns a list of gspread batch_update dicts for the section.
+        status_index: pre-computed {nopol: status_string} from main.py
         """
         batch = []
         nopol_row_map = locator.get_nopol_row_map(section)
@@ -56,8 +58,7 @@ class SheetWriter:
                 lokasi_val = None  # Don't update if GPS missing
 
             # --- STATUS ---
-            from gfleet.client import GFleetClient
-            new_status = GFleetClient.derive_sheet_status(record) if record else "GPS Missing"
+            new_status = status_index.get(nopol, "GPS Missing")
             existing_status = self._get_cell(row_values, col_off, COL_STATUS)
             write_status = self._should_overwrite_status(existing_status, new_status)
 
