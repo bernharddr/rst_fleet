@@ -86,20 +86,97 @@ async def _broadcast_loop(interval: float = 10.0):
 
 # ── Snapshot + geocoding background job ──────────────────────────────────────
 
-def _run_snapshot():
-    """Run the full main.py pipeline in a thread (generates fleet_report.html)."""
-    try:
-        from main import run as main_run
-        main_run()
-        logger.info("Snapshot generated.")
-    except Exception as e:
-        logger.error(f"Snapshot generation failed: {e}")
+def _generate_snapshot():
+    """
+    Generate HTML snapshot from poller's in-memory vehicle data.
+    No extra GFleet API call — reuses data already fetched by the poller.
+    """
+    import os
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    from geocoding.nominatim import NominatimGeocoder
+    from output.reporter import save_and_report
+    from state.tracker import load_state, haversine_km, bearing_arrow
+    from main import load_fleet_assignments, _format_prev_time
+    from config.settings import ENGINE_ON_VOLTAGE_MV
+
+    with poller.current_vehicles_lock:
+        vehicles_raw = list(poller.current_vehicles)
+
+    if not vehicles_raw:
+        logger.warning("Snapshot skipped: poller has no data yet.")
+        return
+
+    now = datetime.now(tz=ZoneInfo("Asia/Jakarta"))
+    vehicle_state = load_state()
+    fleet_assignments = load_fleet_assignments()
+
+    # Geocode all unique non-zero coordinates (uses disk cache, minimal OSM calls)
+    geocoder = NominatimGeocoder()
+    coords = [
+        (v["lat"], v["lng"]) for v in vehicles_raw
+        if v["lat"] != 0.0 or v["lng"] != 0.0
+    ]
+    geo_by_coord = geocoder.batch_geocode(coords)
+
+    vehicles_data = []
+    for v in vehicles_raw:
+        nopol = v["nopol"]
+        lat, lng = v["lat"], v["lng"]
+        ext_voltage = v.get("ext_voltage", 0)
+        engine_on = ext_voltage >= ENGINE_ON_VOLTAGE_MV
+
+        if lat == 0.0 and lng == 0.0:
+            status = "GPS Missing"
+            lokasi = "GPS Missing"
+            lokasi_detil = None
+        else:
+            prev = vehicle_state.get(nopol)
+            dist = haversine_km(prev["lat"], prev["lng"], lat, lng) if prev else 0.0
+            moved = dist >= 1.0
+
+            if moved:
+                status = "Jalan"
+            elif engine_on:
+                status = "Idle"
+            else:
+                status = "Berhenti"
+
+            area, lokasi_detil = geo_by_coord.get((lat, lng), ("LOKASI TIDAK DIKETAHUI", None))
+            if prev and moved:
+                arrow = bearing_arrow(prev["lat"], prev["lng"], lat, lng)
+                prev_time_str = _format_prev_time(prev.get("time", ""))
+                lokasi = f"{area} ({arrow} {dist:.2f}km vs {prev_time_str})"
+            else:
+                lokasi = area
+
+        vehicles_data.append({
+            "nopol": nopol,
+            "assignment": fleet_assignments.get(nopol, "Other"),
+            "status": status,
+            "engine_on": engine_on,
+            "voltage_v": round(ext_voltage / 1000, 2),
+            "speed_kmh": round(v.get("speed", 0), 1),
+            "odo_km": round(v.get("odo", 0), 1),
+            "lat": lat,
+            "lng": lng,
+            "lokasi": lokasi,
+            "lokasi_detil": lokasi_detil,
+            "gps_time": v.get("gps_time", ""),
+        })
+
+    save_and_report(vehicles_data, now, fleet_assignments)
+    logger.info(f"Snapshot generated from poller data ({len(vehicles_data)} vehicles).")
 
 
 def _snapshot_loop(interval_minutes: int = 15):
-    time.sleep(30)  # Wait for first poll to complete before first snapshot
+    # Wait for poller to complete at least one successful fetch before first snapshot
+    time.sleep(60)
     while True:
-        _run_snapshot()
+        try:
+            _generate_snapshot()
+        except Exception as e:
+            logger.error(f"Snapshot generation failed: {e}")
         time.sleep(interval_minutes * 60)
 
 
