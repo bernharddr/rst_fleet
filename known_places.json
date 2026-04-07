@@ -1,14 +1,86 @@
 [
   {
     "_comment": "Tambahkan lokasi pelanggan/pabrik di sini. lat/lng = koordinat tengah, radius_km = jarak deteksi.",
-    "_example": true
+    "_howto": "Buka Google Maps → cari lokasi → klik titik → copy koordinat → update lat/lng di sini"
+  },
+
+  {"_section": "=== PABRIK KERTAS ==="},
+  {
+    "name": "PINDO DELI 1 - PERAWANG",
+    "lat": 0.5637,
+    "lng": 101.8762,
+    "radius_km": 1.5,
+    "_verify": true
   },
   {
-    "_note": "Verifikasi koordinat Indah Kiat — buka Google Maps, cari PT Indah Kiat Pulp & Paper Serang, klik lokasi, copy koordinat",
+    "name": "PINDO DELI 2 - PERAWANG",
+    "lat": 0.5701,
+    "lng": 101.8834,
+    "radius_km": 1.5,
+    "_verify": true
+  },
+  {
+    "name": "PINDO DELI 3 - PERAWANG",
+    "lat": 0.5770,
+    "lng": 101.8910,
+    "radius_km": 1.5,
+    "_verify": true
+  },
+  {
     "name": "INDAH KIAT PULP & PAPER - SERANG",
     "lat": -6.1180,
     "lng": 106.2830,
-    "radius_km": 2.0
+    "radius_km": 2.0,
+    "_verify": true
+  },
+
+  {"_section": "=== DEPO / GARASI ==="},
+  {
+    "name": "GARASI ROROTAN",
+    "lat": -6.1021,
+    "lng": 106.9478,
+    "radius_km": 0.5,
+    "_verify": true
+  },
+  {
+    "name": "DEPO KBN CAKUNG",
+    "lat": -6.1598,
+    "lng": 106.9542,
+    "radius_km": 1.5
+  },
+  {
+    "name": "DEPO KBN MARUNDA",
+    "lat": -6.0862,
+    "lng": 106.9912,
+    "radius_km": 1.5
+  },
+  {
+    "name": "DEPO MTCON",
+    "lat": -6.1050,
+    "lng": 106.9650,
+    "radius_km": 1.0,
+    "_verify": true
+  },
+  {
+    "name": "DEPO TUNGYA",
+    "lat": -6.1620,
+    "lng": 106.9380,
+    "radius_km": 1.0,
+    "_verify": true
+  },
+
+  {"_section": "=== PELABUHAN ==="},
+  {
+    "name": "PELABUHAN NPCT 1 - KALIBARU",
+    "lat": -6.1054,
+    "lng": 106.9012,
+    "radius_km": 1.5
+  },
+  {
+    "name": "PELABUHAN JICT - TANJUNG PRIOK",
+    "lat": -6.0985,
+    "lng": 106.8823,
+    "radius_km": 1.5
   },
   {
     "name": "PELABUHAN TANJUNG PRIOK",

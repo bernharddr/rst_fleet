@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 HISTORY_DIR = Path("history")
 REPORT_FILE = Path("fleet_report.html")
-MAX_SNAPSHOTS = 20
+MAX_SNAPSHOTS = 100
 
 ASSIGNMENT_ORDER = [
     # TEK & TEJ groups first — Oncall Trailer on top
@@ -39,6 +39,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RST Fleet Monitor</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:Arial,sans-serif;font-size:13px;background:#f0f2f5;padding:14px}
@@ -76,11 +78,30 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .prev{display:block;font-size:11px;color:#e65100;margin-top:2px}
   .prev-lokasi{font-size:11px;color:#888}
   #no-cmp{display:none}
+  .tabs{display:flex;gap:8px;margin-bottom:10px}
+  .tab-btn{padding:8px 20px;border:2px solid #2c3e50;border-radius:6px;background:#fff;
+    color:#2c3e50;font-weight:bold;font-size:13px;cursor:pointer;transition:all .15s}
+  .tab-btn.active{background:#2c3e50;color:#fff}
+  .tab-btn:hover:not(.active){background:#ecf0f1}
+  #map-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:#fff;border-radius:8px;padding:10px 14px;
+    box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:10px}
+  #map-toolbar input,#map-toolbar select{padding:5px 8px;border:1px solid #ccc;
+    border-radius:5px;font-size:13px}
+  #map-count{font-size:12px;color:#666}
+  #map-view{height:calc(100vh - 200px);min-height:500px;border-radius:8px;
+    border:1px solid #ddd}
 </style>
 </head>
 <body>
 <h1>&#x1F69B;&nbsp;RST Fleet Monitor</h1>
 
+<div class="tabs">
+  <button class="tab-btn active" data-tab="table" onclick="switchTab('table')">&#x1F4CB;&nbsp;Tabel</button>
+  <button class="tab-btn" data-tab="map" onclick="switchTab('map')">&#x1F5FA;&nbsp;Peta</button>
+</div>
+
+<div id="tab-table">
 <div class="toolbar">
   <span>&#x1F550;&nbsp;<strong id="cur-ts" class="ts"></strong></span>
   <label style="font-weight:bold;font-size:12px">Bandingkan dengan:&nbsp;
@@ -111,6 +132,23 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   </thead>
   <tbody id="tbody"></tbody>
 </table>
+</div><!-- #tab-table -->
+
+<div id="tab-map" style="display:none">
+  <div id="map-toolbar">
+    <label style="font-weight:bold;font-size:12px">&#x1F50D;&nbsp;Cari NOPOL:&nbsp;
+      <input id="map-search" type="text" placeholder="B 9973 TEJ..." style="width:160px"
+        oninput="renderMap()">
+    </label>
+    <label style="font-weight:bold;font-size:12px">Grup:&nbsp;
+      <select id="map-grp-filter" onchange="renderMap()">
+        <option value="ALL">Semua Grup</option>
+      </select>
+    </label>
+    <span id="map-count" class="ts"></span>
+  </div>
+  <div id="map-view"></div>
+</div><!-- #tab-map -->
 
 <script>
 const SNAPSHOTS=__SNAPSHOTS__;
@@ -230,7 +268,89 @@ function render(){
     document.getElementById('change-count').textContent='';
   }
 }
-window.onload=render;
+
+// ── MAP VIEW ──────────────────────────────────────────────
+let map=null, markersLayer=null;
+const STATUS_EMOJI={'Jalan':'🚛','Idle':'🚚','Berhenti':'🅿️','GPS Missing':'❓'};
+const STATUS_COLOR={'Jalan':'#28a745','Idle':'#ffc107','Berhenti':'#dc3545','GPS Missing':'#aaa'};
+
+function initMap(){
+  if(map)return;
+  map=L.map('map-view').setView([-6.2,107.0],8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:19
+  }).addTo(map);
+  markersLayer=L.layerGroup().addTo(map);
+}
+
+function renderMap(){
+  if(!SNAPSHOTS.length||!map)return;
+  markersLayer.clearLayers();
+  const cur=SNAPSHOTS[0];
+  const filterGrp=document.getElementById('map-grp-filter').value;
+  const search=document.getElementById('map-search').value.trim().toUpperCase();
+
+  const visible=[];
+  cur.vehicles.forEach(v=>{
+    if(!v.lat||!v.lng||v.lat===0&&v.lng===0)return;
+    if(filterGrp&&filterGrp!=='ALL'&&(FA[v.nopol]||'Other')!==filterGrp)return;
+    if(search&&!v.nopol.toUpperCase().includes(search))return;
+    visible.push(v);
+  });
+
+  visible.forEach(v=>{
+    const emoji=STATUS_EMOJI[v.status]||'❓';
+    const color=STATUS_COLOR[v.status]||'#aaa';
+    const icon=L.divIcon({
+      className:'',
+      html:`<div style="text-align:center;line-height:1">
+        <div style="font-size:22px">${emoji}</div>
+        <div style="background:rgba(255,255,255,0.92);border:1px solid ${color};border-radius:4px;
+          padding:1px 4px;font-size:10px;font-weight:bold;white-space:nowrap;margin-top:1px">${v.nopol}</div>
+      </div>`,
+      iconAnchor:[28,32], iconSize:[56,40],
+    });
+    const m=L.marker([v.lat,v.lng],{icon});
+    const detil=v.lokasi_detil?`<br><b style="color:#155724">${v.lokasi_detil}</b>`:'';
+    m.bindPopup(`<b>${v.nopol}</b><br>
+      Status: <b>${v.status}</b><br>
+      Engine: ${v.engine_on?'<b style="color:green">ON</b>':'OFF'}<br>
+      Volt: ${v.voltage_v}V &nbsp; Speed: ${v.speed_kmh} km/h<br>
+      ODO: ${(v.odo_km||0).toLocaleString('id-ID')} km<br>
+      ${v.lokasi||''}${detil}`);
+    markersLayer.addLayer(m);
+  });
+
+  // Auto-fit to visible markers
+  if(visible.length>0&&!search&&filterGrp==='ALL'){
+    const lats=visible.map(v=>v.lat),lngs=visible.map(v=>v.lng);
+    map.fitBounds([[Math.min(...lats),Math.min(...lngs)],[Math.max(...lats),Math.max(...lngs)]],{padding:[30,30]});
+  }
+
+  // If search matches exactly 1, center on it
+  if(visible.length===1){
+    map.setView([visible[0].lat,visible[0].lng],15);
+    markersLayer.getLayers()[0]?.openPopup();
+  }
+  document.getElementById('map-count').textContent=`${visible.length} unit ditampilkan`;
+}
+
+function switchTab(tab){
+  document.getElementById('tab-table').style.display=tab==='table'?'block':'none';
+  document.getElementById('tab-map').style.display=tab==='map'?'block':'none';
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  if(tab==='map'){
+    initMap();
+    setTimeout(()=>{map.invalidateSize();renderMap();},100);
+  }
+}
+
+window.onload=function(){
+  // Populate map group filter
+  const sel=document.getElementById('map-grp-filter');
+  ORDER.forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=g;sel.appendChild(o);});
+  render();
+};
 </script>
 </body>
 </html>"""
