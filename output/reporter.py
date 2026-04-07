@@ -103,6 +103,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <th>ENGINE</th>
       <th>VOLT</th>
       <th>LOKASI</th>
+      <th style="background:#1a6b3a">LOKASI DETIL</th>
       <th id="cmp-col-hdr" style="display:none;min-width:160px">LOKASI SEBELUMNYA</th>
     </tr>
   </thead>
@@ -133,7 +134,7 @@ function rc(st){
 
 function render(){
   if(!SNAPSHOTS.length){
-    document.getElementById('tbody').innerHTML='<tr><td colspan="7" style="text-align:center;padding:30px;color:#999">Belum ada data.</td></tr>';
+    document.getElementById('tbody').innerHTML='<tr><td colspan="8" style="text-align:center;padding:30px;color:#999">Belum ada data.</td></tr>';
     return;
   }
   const cur=SNAPSHOTS[0];
@@ -188,7 +189,7 @@ function render(){
     const vs=grps[grp];
     if(!vs||!vs.length)return;
     vs.sort((a,b)=>a.nopol.localeCompare(b.nopol));
-    html+=`<tr class="gr-header"><td colspan="7">&#x1F4CC;&nbsp;${grp} &mdash; ${vs.length} unit</td></tr>`;
+    html+=`<tr class="gr-header"><td colspan="8">&#x1F4CC;&nbsp;${grp} &mdash; ${vs.length} unit</td></tr>`;
     vs.forEach((v,i)=>{
       const pv=pm[v.nopol];
       const locChanged=pv&&stripDist(v.lokasi)!==stripDist(pv.lokasi);
@@ -201,6 +202,8 @@ function render(){
       let locHtml=v.lokasi||'-';
       let cmpLoc='';
       if(prev){cmpLoc=pv?(pv.lokasi||'-'):'<i style="color:#aaa">tidak ada data</i>';}
+      const detil=v.lokasi_detil||'';
+      const detilHtml=detil?`<span style="font-weight:bold;color:#155724">${detil}</span>`:'<span style="color:#ccc">—</span>';
       html+=`<tr class="${rowCls}">
         <td style="color:#999;font-size:11px">${i+1}</td>
         <td><strong>${v.nopol}</strong></td>
@@ -208,6 +211,7 @@ function render(){
         <td>${v.engine_on?'<b style="color:#28a745">ON</b>':'<span style="color:#aaa">OFF</span>'}</td>
         <td style="white-space:nowrap">${v.voltage_v!=null?v.voltage_v.toFixed(2)+'V':'-'}</td>
         <td>${locHtml}</td>
+        <td>${detilHtml}</td>
         ${prev?`<td class="prev-lokasi">${cmpLoc}</td>`:''}
       </tr>`;
     });

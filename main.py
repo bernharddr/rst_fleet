@@ -96,23 +96,25 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
         if rec.lat != 0.0 or rec.lng != 0.0:
             coords_to_geocode.append((rec.lat, rec.lng))
 
-    # Step 4: Geocode all unique coordinates
+    # Step 4: Geocode all unique coordinates → returns (area, detail) per coord
     geocoder = NominatimGeocoder()
-    location_by_coord = geocoder.batch_geocode(coords_to_geocode)
+    geo_by_coord = geocoder.batch_geocode(coords_to_geocode)
 
-    # Step 5: Build location strings (with distance if moved)
-    location_index: dict[str, str] = {}
+    # Step 5: Build location strings (with distance/direction if moved)
+    location_index: dict[str, str] = {}   # broad area
+    detail_index: dict[str, str | None] = {}  # specific facility
     for nopol, rec in nopol_index.items():
         if rec.lat != 0.0 or rec.lng != 0.0:
-            lokasi = location_by_coord.get((rec.lat, rec.lng), "LOKASI TIDAK DIKETAHUI")
+            area, detail = geo_by_coord.get((rec.lat, rec.lng), ("LOKASI TIDAK DIKETAHUI", None))
             prev = vehicle_state.get(nopol)
             if prev:
                 dist = haversine_km(prev["lat"], prev["lng"], rec.lat, rec.lng)
                 if dist >= 0.01:
                     prev_time_str = _format_prev_time(prev.get("time", ""))
                     arrow = bearing_arrow(prev["lat"], prev["lng"], rec.lat, rec.lng)
-                    lokasi = f"{lokasi} ({arrow} {dist:.2f}km vs {prev_time_str})"
-            location_index[nopol] = lokasi
+                    area = f"{area} ({arrow} {dist:.2f}km vs {prev_time_str})"
+            location_index[nopol] = area
+            detail_index[nopol] = detail
 
     # Step 6: Build vehicle data list for the HTML report
     fleet_assignments = load_fleet_assignments()
@@ -127,6 +129,7 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
             "lat": rec.lat,
             "lng": rec.lng,
             "lokasi": location_index.get(nopol, "GPS Missing"),
+            "lokasi_detil": detail_index.get(nopol),
             "gps_time": rec.gps_time,
         })
 
@@ -139,8 +142,8 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
         for nopol, rec in nopol_index.items():
             groups[fleet_assignments.get(nopol, "Other")].append((nopol, rec))
 
-        header = f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENG':<4}  {'VOLT':>7}  LOKASI"
-        divider = f"  {'-'*20}  {'-'*15}  {'-'*4}  {'-'*7}  {'-'*35}"
+        header = f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENG':<4}  {'VOLT':>7}  {'LOKASI':<40}  LOKASI DETIL"
+        divider = f"  {'-'*20}  {'-'*15}  {'-'*4}  {'-'*7}  {'-'*40}  {'-'*25}"
 
         logger.info("--- DRY RUN — Vehicle statuses ---")
         for assignment in ASSIGNMENT_ORDER:
@@ -155,8 +158,9 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
                 engine = "ON" if engine_index.get(nopol) else "OFF"
                 voltage_v = rec.ext_voltage / 1000
                 lokasi = location_index.get(nopol, "GPS Missing")
+                detil = detail_index.get(nopol) or "-"
                 logger.info(
-                    f"  {nopol:<20}  {status:<15}  {engine:<4}  {voltage_v:>6.2f}V  {lokasi}"
+                    f"  {nopol:<20}  {status:<15}  {engine:<4}  {voltage_v:>6.2f}V  {lokasi:<40}  {detil}"
                 )
         logger.info("\n--- DRY RUN complete — HTML report saved ---")
 
