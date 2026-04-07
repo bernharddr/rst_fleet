@@ -277,8 +277,9 @@ const STATUS_COLOR={'Jalan':'#28a745','Idle':'#ffc107','Berhenti':'#dc3545','GPS
 function initMap(){
   if(map)return;
   map=L.map('map-view').setView([-6.2,107.0],8);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OpenStreetMap contributors',maxZoom:19
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+    subdomains:'abcd',maxZoom:19
   }).addTo(map);
   markersLayer=L.layerGroup().addTo(map);
 }
