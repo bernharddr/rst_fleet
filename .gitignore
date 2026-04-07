@@ -1,5 +1,10 @@
 .env
 credentials.json
+geocoding_cache.json
+vehicle_state.json
+history/
+fleet_report.html
+output.txt
 __pycache__/
 *.pyc
 *.pyo

@@ -9,6 +9,30 @@ from config.settings import NOMINATIM_USER_AGENT, NOMINATIM_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
+_CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "geocoding_cache.json")
+
+
+def _load_disk_cache() -> dict:
+    if not os.path.exists(_CACHE_FILE):
+        return {}
+    try:
+        with open(_CACHE_FILE, encoding="utf-8") as f:
+            raw = json.load(f)
+        # Keys are stored as "lat,lng" strings; values are [area, detail_or_null]
+        return {tuple(k.split(",")): (v[0], v[1]) for k, v in raw.items()}
+    except Exception as e:
+        logger.warning(f"Could not load geocoding cache: {e}")
+        return {}
+
+
+def _save_disk_cache(cache: dict) -> None:
+    try:
+        serializable = {f"{k[0]},{k[1]}": list(v) for k, v in cache.items()}
+        with open(_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Could not save geocoding cache: {e}")
+
 KNOWN_LOCATIONS = {
     "merak": "PELABUHAN MERAK",
     "bakauheni": "PELABUHAN BAKAUHENI",
@@ -74,8 +98,9 @@ class NominatimGeocoder:
 
     def __init__(self):
         self._last_request_time: float = 0.0
-        self._cache: dict[tuple[float, float], tuple[str, str | None]] = {}
+        self._cache: dict = _load_disk_cache()
         self._known_places = _load_known_places()
+        logger.info(f"Geocoding cache: {len(self._cache)} entries loaded from disk.")
         if self._known_places:
             logger.info(f"Loaded {len(self._known_places)} known places from known_places.json")
 
@@ -207,4 +232,6 @@ class NominatimGeocoder:
                 result[(lat, lng)] = self.reverse_geocode(lat, lng)
                 osm_calls += 1
         logger.info(f"Geocoding done: {cache_hits} cache hits, {osm_calls} OSM calls.")
+        if osm_calls > 0:
+            _save_disk_cache(self._cache)
         return result
