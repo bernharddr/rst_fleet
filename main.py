@@ -24,7 +24,7 @@ from gfleet.auth import GFleetAuthenticator
 from gfleet.client import GFleetClient
 from geocoding.nominatim import NominatimGeocoder
 from output.reporter import save_and_report, ASSIGNMENT_ORDER
-from state.tracker import load_state, save_state, update_state, haversine_km
+from state.tracker import load_state, save_state, update_state, haversine_km, bearing_arrow
 
 logging.basicConfig(
     level=logging.INFO,
@@ -110,7 +110,8 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
                 dist = haversine_km(prev["lat"], prev["lng"], rec.lat, rec.lng)
                 if dist >= 0.01:
                     prev_time_str = _format_prev_time(prev.get("time", ""))
-                    lokasi = f"{lokasi} ({dist:.2f}km vs {prev_time_str})"
+                    arrow = bearing_arrow(prev["lat"], prev["lng"], rec.lat, rec.lng)
+                    lokasi = f"{lokasi} ({arrow} {dist:.2f}km vs {prev_time_str})"
             location_index[nopol] = lokasi
 
     # Step 6: Build vehicle data list for the HTML report

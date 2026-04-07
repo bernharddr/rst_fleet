@@ -49,6 +49,19 @@ def save_state(state: dict) -> None:
         logger.warning(f"Could not save vehicle state: {e}")
 
 
+_ARROWS = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]  # N NE E SE S SW W NW
+
+
+def bearing_arrow(lat1: float, lng1: float, lat2: float, lng2: float) -> str:
+    """Returns an 8-point compass arrow for travel direction from point 1 → point 2."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dlambda = math.radians(lng2 - lng1)
+    x = math.sin(dlambda) * math.cos(phi2)
+    y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(dlambda)
+    deg = (math.degrees(math.atan2(x, y)) + 360) % 360
+    return _ARROWS[round(deg / 45) % 8]
+
+
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """
     Returns the great-circle distance in kilometres between two GPS points.
