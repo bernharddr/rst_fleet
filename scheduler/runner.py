@@ -10,6 +10,8 @@ Usage:
 
 import argparse
 import logging
+import os
+import subprocess
 import time
 
 import schedule
@@ -35,12 +37,19 @@ def _safe_run() -> None:
 def start_scheduler(interval_minutes: int = 15) -> None:
     schedule.every(interval_minutes).minutes.do(_safe_run)
 
-    logger.info(f"Fleet tracker scheduler started — running every {interval_minutes} minutes.")
-    logger.info("Keep this window open. Press Ctrl+C to stop.")
-    logger.info(f"First run in {interval_minutes} minutes. Running once now...")
+    logger.info(f"Scheduler started — setiap {interval_minutes} menit. Ctrl+C untuk berhenti.")
 
-    # Run immediately on start, then on the interval
+    # Run immediately on start, open browser, then repeat on interval
     _safe_run()
+    report = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fleet_report.html")
+    if os.path.exists(report):
+        try:
+            os.startfile(report)
+        except Exception:
+            pass
+
+    schedule.every(interval_minutes).minutes.do(_safe_run)
+    logger.info(f"Laporan berikutnya dalam {interval_minutes} menit...")
 
     while True:
         schedule.run_pending()
