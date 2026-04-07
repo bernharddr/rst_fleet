@@ -1,6 +1,5 @@
 import time
 import logging
-from functools import lru_cache
 import requests
 
 from config.settings import NOMINATIM_USER_AGENT, NOMINATIM_DELAY_SECONDS
@@ -16,20 +15,35 @@ KNOWN_LOCATIONS = {
     "depo delta": "DEPO DELTA",
 }
 
+# Address fields to try in priority order — comprehensive for Indonesian OSM data
+ADDRESS_FIELD_PRIORITY = (
+    "amenity", "building", "industrial", "retail", "commercial",
+    "hamlet", "quarter", "suburb", "neighbourhood",
+    "village", "town", "municipality",
+    "city_district", "city", "county", "state_district",
+)
+
+# Prefixes that indicate a road name — skip these when parsing display_name
+ROAD_PREFIXES = ("jalan", "jl.", "jl ", "gang", "gg.", "tol ", "jalan tol")
+
+# Values to ignore as too generic
+IGNORE_VALUES = {"indonesia", "java", "jawa", "kalimantan", "sumatra", "sumatera",
+                 "sulawesi", "bali", "papua", "nusa tenggara"}
+
 
 class NominatimGeocoder:
     """
-    Reverse geocodes lat/lng to a human-readable Indonesian location name via OSM Nominatim.
+    Reverse geocodes lat/lng using OSM Nominatim.
 
-    Usage policy:
-    - Max 1 request/second (enforced via throttle)
-    - Results are cached in-memory per process run to avoid duplicate calls
+    Uses a simple dict cache to avoid re-requesting the same coordinates.
+    Throttles to ≤1 request/second per OSM policy.
     """
 
     BASE_URL = "https://nominatim.openstreetmap.org/reverse"
 
     def __init__(self):
         self._last_request_time: float = 0.0
+        self._cache: dict[tuple[float, float], str] = {}
 
     def _throttle(self):
         elapsed = time.monotonic() - self._last_request_time
@@ -38,15 +52,14 @@ class NominatimGeocoder:
         self._last_request_time = time.monotonic()
 
     def reverse_geocode(self, lat: float, lng: float) -> str:
-        return self._cached_geocode(round(lat, 4), round(lng, 4))
+        key = (round(lat, 4), round(lng, 4))
+        if key in self._cache:
+            return self._cache[key]
 
-    @lru_cache(maxsize=512)
-    def _cached_geocode(self, lat: float, lng: float) -> str:
         self._throttle()
-        # zoom=12 gives city/district level — better for moving trucks on highways
         params = {
-            "lat": lat,
-            "lon": lng,
+            "lat": key[0],
+            "lon": key[1],
             "format": "json",
             "zoom": 12,
             "addressdetails": 1,
@@ -62,38 +75,42 @@ class NominatimGeocoder:
             data = resp.json()
             address = data.get("address", {})
             display_name = data.get("display_name", "")
-            return self._extract_location_name(address, display_name)
+            result = self._extract_location_name(address, display_name)
+            logger.debug(f"OSM ({lat},{lng}) → {result}  [display: {display_name[:60]}]")
         except Exception as e:
             logger.warning(f"OSM geocoding failed for ({lat},{lng}): {e}")
-            return "LOKASI TIDAK DIKETAHUI"
+            result = "LOKASI TIDAK DIKETAHUI"
+
+        self._cache[key] = result
+        return result
 
     def _extract_location_name(self, address: dict, display_name: str = "") -> str:
-        # Check known terminals/depots first
+        # 1. Check known terminals/ports/depots
         full_text = " ".join(str(v).lower() for v in address.values())
+        full_text += " " + display_name.lower()
         for keyword, canonical in KNOWN_LOCATIONS.items():
             if keyword in full_text:
                 return canonical
 
-        # Indonesian address priority — broadest useful level first
-        # Typical Nominatim keys for Indonesia:
-        #   village/kelurahan → suburb → city_district/kecamatan → city/kabupaten → county
-        for key in (
-            "amenity", "building",
-            "suburb", "village", "town",
-            "city_district", "neighbourhood",
-            "city", "county", "state_district",
-        ):
+        # 2. Try address fields in priority order
+        for key in ADDRESS_FIELD_PRIORITY:
             val = address.get(key, "").strip()
-            if val and val.lower() not in ("indonesia",):
+            if val and val.lower() not in IGNORE_VALUES:
                 return val.upper()
 
-        # Last resort: extract second segment of display_name
-        # e.g. "Jl. Raya Serang, Cikande, Serang Regency, Banten, Java, Indonesia"
-        # → "CIKANDE"
+        # 3. Parse display_name — skip road segments, return first useful segment
+        # e.g. "Jl. Raya Bandung, Leles, Kabupaten Garut, Jawa Barat, Indonesia"
+        #       → skip "Jl. Raya Bandung" → return "LELES"
         if display_name:
             parts = [p.strip() for p in display_name.split(",")]
-            if len(parts) >= 2:
-                return parts[1].upper()
+            for part in parts:
+                lower = part.lower()
+                if lower in IGNORE_VALUES:
+                    continue
+                if any(lower.startswith(prefix) for prefix in ROAD_PREFIXES):
+                    continue
+                if part and len(part) > 2:
+                    return part.upper()
 
         return "LOKASI TIDAK DIKETAHUI"
 
@@ -102,7 +119,15 @@ class NominatimGeocoder:
     ) -> dict[tuple[float, float], str]:
         unique = list(set(coords))
         result: dict[tuple[float, float], str] = {}
+        cache_hits = 0
+        osm_calls = 0
         for lat, lng in unique:
-            result[(lat, lng)] = self.reverse_geocode(lat, lng)
-        logger.info(f"Geocoded {len(unique)} unique coordinates via OSM.")
+            key = (round(lat, 4), round(lng, 4))
+            if key in self._cache:
+                result[(lat, lng)] = self._cache[key]
+                cache_hits += 1
+            else:
+                result[(lat, lng)] = self.reverse_geocode(lat, lng)
+                osm_calls += 1
+        logger.info(f"Geocoding done: {cache_hits} cache hits, {osm_calls} OSM calls.")
         return result
