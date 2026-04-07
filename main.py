@@ -113,8 +113,7 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
     location_index: dict[str, str] = {}
     for nopol, rec in nopol_index.items():
         if rec.lat != 0.0 or rec.lng != 0.0:
-            key = (round(rec.lat, 4), round(rec.lng, 4))
-            location_index[nopol] = location_by_coord.get(key, "LOKASI TIDAK DIKETAHUI")
+            location_index[nopol] = location_by_coord.get((rec.lat, rec.lng), "LOKASI TIDAK DIKETAHUI")
 
     if dry_run:
         logger.info("--- DRY RUN — Vehicle statuses ---")
