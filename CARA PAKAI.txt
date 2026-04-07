@@ -1,0 +1,131 @@
+============================================================
+  RST FLEET MONITOR — PANDUAN INSTALASI & PENGGUNAAN
+============================================================
+
+Dibuat untuk: Tim RST
+Bahasa: Indonesia
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  LANGKAH 1 — INSTALL PYTHON (hanya sekali, pertama kali)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Buka browser, pergi ke: https://www.python.org/downloads/
+2. Klik tombol kuning besar "Download Python"
+3. Buka file yang ter-download (namanya seperti python-3.x.x.exe)
+4. PENTING: Centang kotak "Add Python to PATH" di bagian bawah
+   sebelum klik Install
+5. Klik "Install Now"
+6. Tunggu sampai selesai, lalu klik Close
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  LANGKAH 2 — DAPATKAN FILE PROGRAM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Minta file ZIP kepada admin/atasan Anda.
+Extract (klik kanan → Extract All) ke folder mana saja,
+misalnya: C:\RST Fleet Monitor\
+
+Pastikan di dalam folder tersebut ada file:
+  ✓ !Run.bat
+  ✓ !Setup (first time only).bat
+  ✓ .env  (file konfigurasi — jangan diedit)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  LANGKAH 3 — SETUP (hanya sekali, pertama kali)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Buka folder program
+2. Klik dua kali (double-click) file:
+      !Setup (first time only).bat
+3. Akan muncul jendela hitam — tunggu sampai muncul tulisan:
+      "Setup complete!"
+4. Tekan Enter atau tutup jendela tersebut
+
+Jika muncul error merah, hubungi admin.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  LANGKAH 4 — CARA PAKAI SEHARI-HARI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Buka folder program
+2. Klik dua kali file:
+      !Run.bat
+3. Akan muncul menu pilihan:
+
+      1. Run and open report
+      2. Run (dry run / console preview)
+      3. Open last report (without running)
+      4. Exit
+
+4. Ketik angka 1, lalu tekan Enter
+5. Program akan mengambil data GPS (proses ~2-3 menit)
+6. Setelah selesai, laporan otomatis terbuka di browser
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CARA MEMBACA LAPORAN (fleet_report.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Laporan dibuka di browser (Chrome, Edge, dll) dan menampilkan:
+
+  STATUS:
+  🟢 Jalan     = Kendaraan sedang bergerak
+  🟡 Idle      = Mesin hidup tapi tidak bergerak
+  🔴 Berhenti  = Mesin mati / parkir
+  ⚪ GPS Missing = Sinyal GPS tidak ada
+
+  ENGINE:
+  ON  = Mesin hidup
+  OFF = Mesin mati
+
+  VOLT:
+  Tegangan aki kendaraan (normal ~25-28V saat mesin hidup)
+
+  LOKASI:
+  Nama tempat berdasarkan koordinat GPS
+  Contoh: CILINCING, JAKARTA UTARA, DKI JAKARTA
+  Jika ada "(2.5km vs 07:48)" artinya kendaraan sudah bergerak
+  2.5 km dibanding posisi terakhir dicatat jam 07:48
+
+  BANDINGKAN DENGAN:
+  Dropdown di atas tabel untuk membandingkan dengan data
+  dari waktu sebelumnya. Baris yang berubah akan berwarna
+  kuning/oranye otomatis.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PERTANYAAN UMUM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+T: Muncul tulisan merah "Python is not installed"
+J: Ulangi Langkah 1, pastikan centang "Add Python to PATH"
+
+T: Muncul tulisan merah ".env file not found"
+J: Minta file .env kepada admin, letakkan di folder program
+
+T: Program berjalan tapi semua lokasi "LOKASI TIDAK DIKETAHUI"
+J: Periksa koneksi internet, lalu coba lagi
+
+T: Laporan tidak terbuka di browser
+J: Cari file "fleet_report.html" di folder program,
+   klik dua kali untuk membukanya secara manual
+
+T: Berapa sering harus dijalankan?
+J: Sesuai kebutuhan. Disarankan setiap 15-30 menit
+   untuk monitoring aktif.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KONTAK ADMIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Jika ada masalah yang tidak bisa diselesaikan sendiri,
+hubungi admin/atasan Anda dengan menyebutkan:
+- Tulisan error yang muncul (foto layar jika perlu)
+- Langkah apa yang sedang dilakukan saat error terjadi
+
+============================================================
