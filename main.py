@@ -53,12 +53,27 @@ def get_current_slot(now: datetime) -> str:
     return best
 
 
+ASSIGNMENT_ORDER = [
+    "Tjiwi Kimia", "Dedicated Tjiwi", "Aliansi",
+    "Oncall TWB", "Oncall Trailer", "Dedicated Internusa",
+    "Dedicated J&T", "Dedicated IKK", "JNE & SPX", "Breakdown", "Other",
+]
+
+
 def load_vehicles_config(path: str = "vehicles.json") -> dict[str, dict]:
     if not os.path.exists(path):
         logger.warning(f"vehicles.json not found at {path}.")
         return {}
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_fleet_assignments(path: str = "fleet_assignments.json") -> dict[str, str]:
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
 def connect_worksheet(sheet_id: str, worksheet_name: str = None) -> gspread.Worksheet:
@@ -122,19 +137,36 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
             location_index[nopol] = lokasi
 
     if dry_run:
-        logger.info("--- DRY RUN — Vehicle statuses ---")
-        logger.info(f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENGINE':<6}  {'VOLTAGE':>7}  {'LAT':>9}  {'LNG':>10}  LOKASI")
-        logger.info(f"  {'-'*20}  {'-'*15}  {'-'*6}  {'-'*7}  {'-'*9}  {'-'*10}  {'-'*25}")
+        fleet_assignments = load_fleet_assignments()
+
+        # Group vehicles by assignment
+        from collections import defaultdict
+        groups: dict[str, list] = defaultdict(list)
         for nopol, rec in nopol_index.items():
-            status = status_index.get(nopol, "?")
-            engine = "ON" if engine_index.get(nopol) else "OFF"
-            voltage_v = rec.ext_voltage / 1000
-            lokasi = location_index.get(nopol, "GPS Missing")
-            logger.info(
-                f"  {nopol:<20}  {status:<15}  {engine:<6}  {voltage_v:>6.2f}V"
-                f"  {rec.lat:>9.4f}  {rec.lng:>10.4f}  {lokasi}"
-            )
-        logger.info("--- DRY RUN complete — no sheet updated ---")
+            assignment = fleet_assignments.get(nopol, "Other")
+            groups[assignment].append((nopol, rec))
+
+        header = f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENGINE':<6}  {'VOLTAGE':>7}  {'LAT':>9}  {'LNG':>10}  LOKASI"
+        divider = f"  {'-'*20}  {'-'*15}  {'-'*6}  {'-'*7}  {'-'*9}  {'-'*10}  {'-'*30}"
+
+        logger.info("--- DRY RUN — Vehicle statuses ---")
+        for assignment in ASSIGNMENT_ORDER:
+            if assignment not in groups:
+                continue
+            vehicles_in_group = sorted(groups[assignment], key=lambda x: x[0])
+            logger.info(f"\n  ===== {assignment} ({len(vehicles_in_group)} units) =====")
+            logger.info(header)
+            logger.info(divider)
+            for nopol, rec in vehicles_in_group:
+                status = status_index.get(nopol, "?")
+                engine = "ON" if engine_index.get(nopol) else "OFF"
+                voltage_v = rec.ext_voltage / 1000
+                lokasi = location_index.get(nopol, "GPS Missing")
+                logger.info(
+                    f"  {nopol:<20}  {status:<15}  {engine:<6}  {voltage_v:>6.2f}V"
+                    f"  {rec.lat:>9.4f}  {rec.lng:>10.4f}  {lokasi}"
+                )
+        logger.info("\n--- DRY RUN complete — no sheet updated ---")
         # Still update state so next dry run has correct prev positions
         for nopol, rec in nopol_index.items():
             update_state(vehicle_state, nopol, rec.lat, rec.lng, rec.gps_time, status_index.get(nopol, ""))
