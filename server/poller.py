@@ -10,13 +10,13 @@ import threading
 import time
 
 from gfleet.auth import GFleetAuthenticator
-from gfleet.client import GFleetClient
+from gfleet.client import GFleetClient, GFleetRateLimitError
 from server.database import insert_position, purge_old
 from state.tracker import load_state, save_state, update_state
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 10
+POLL_INTERVAL_SECONDS = 30  # GFleet API rate-limits at ~1 req/20s; 30s is safe
 
 # Shared state — read by WebSocket broadcaster
 current_vehicles: list[dict] = []
@@ -111,9 +111,15 @@ def run_forever(poll_interval: int = POLL_INTERVAL_SECONDS) -> None:
             if n:
                 logger.debug(f"Poller: {n} new GPS rows inserted")
             consecutive_errors = 0
+        except GFleetRateLimitError as e:
+            # Respect Retry-After from API, add a small buffer
+            wait = e.retry_after + 5
+            logger.warning(f"Rate limited by GFleet — waiting {wait}s before retry")
+            time.sleep(wait)
+            continue
         except Exception as e:
             consecutive_errors += 1
-            backoff = min(60, poll_interval * consecutive_errors)
+            backoff = min(120, poll_interval * consecutive_errors)
             logger.warning(f"Poller error ({consecutive_errors}x): {e} — retry in {backoff}s")
             time.sleep(backoff)
             continue

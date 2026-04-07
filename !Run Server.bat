@@ -4,7 +4,7 @@ echo   RST Fleet Monitor — SERVER MODE
 echo ============================================
 echo.
 echo   Mode server akan:
-echo   - Poll data GPS setiap 10 detik
+echo   - Poll data GPS setiap 30 detik (batas GFleet API)
 echo   - Simpan riwayat GPS ke database lokal
 echo   - Generate laporan setiap 15 menit
 echo   - Buka dashboard di browser otomatis

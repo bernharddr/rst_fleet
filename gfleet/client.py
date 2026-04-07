@@ -13,6 +13,12 @@ class GFleetAPIError(Exception):
     pass
 
 
+class GFleetRateLimitError(GFleetAPIError):
+    def __init__(self, msg: str, retry_after: int = 30):
+        super().__init__(msg)
+        self.retry_after = retry_after
+
+
 @dataclass
 class VehicleRecord:
     device_id: str
@@ -58,7 +64,12 @@ class GFleetClient:
                 logger.info("Token expired, refreshing...")
                 self.auth.get_token(force_refresh=True)
                 resp = requests.get(url, headers=self._headers(), timeout=60)
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", 30))
+                raise GFleetRateLimitError(f"Rate limited by GFleet API", retry_after=retry_after)
             resp.raise_for_status()
+        except GFleetRateLimitError:
+            raise
         except requests.RequestException as e:
             raise GFleetAPIError(f"Failed to fetch vehicles: {e}") from e
 
