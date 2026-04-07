@@ -53,6 +53,19 @@ def get_current_slot(now: datetime) -> str:
     return best
 
 
+def _format_prev_time(time_str: str) -> str:
+    """Convert a UTC ISO timestamp from vehicle state to a WIB HH:MM string."""
+    if not time_str:
+        return "?"
+    try:
+        from datetime import timezone, timedelta
+        utc = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        wib = utc.astimezone(ZoneInfo("Asia/Jakarta"))
+        return wib.strftime("%H:%M")
+    except Exception:
+        return "?"
+
+
 ASSIGNMENT_ORDER = [
     "Tjiwi Kimia", "Dedicated Tjiwi", "Aliansi",
     "Oncall TWB", "Oncall Trailer", "Dedicated Internusa",
@@ -133,7 +146,8 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
             if prev:
                 dist = haversine_km(prev["lat"], prev["lng"], rec.lat, rec.lng)
                 if dist >= 0.01:
-                    lokasi = f"{lokasi} ({dist:.2f}km)"
+                    prev_time_str = _format_prev_time(prev.get("time", ""))
+                    lokasi = f"{lokasi} ({dist:.2f}km vs {prev_time_str})"
             location_index[nopol] = lokasi
 
     if dry_run:
