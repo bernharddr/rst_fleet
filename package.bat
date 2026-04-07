@@ -7,7 +7,7 @@ set ZIP_NAME=rst-fleet-monitor_%DATE:~-4,4%%DATE:~-7,2%%DATE:~-10,2%.zip
 REM Use PowerShell to create zip (works on Windows 10+)
 powershell -Command ^
   "Compress-Archive -Force -Path ^
-    'main.py','run.bat','setup.bat','requirements.txt', ^
+    'main.py','!Run.bat','!Setup (first time only).bat','requirements.txt', ^
     '.env','fleet_assignments.json', ^
     'config','gfleet','geocoding','output','sheets','state', ^
     'scheduler','vehicles.json', ^

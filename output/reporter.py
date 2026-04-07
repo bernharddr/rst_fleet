@@ -17,9 +17,20 @@ REPORT_FILE = Path("fleet_report.html")
 MAX_SNAPSHOTS = 20
 
 ASSIGNMENT_ORDER = [
-    "Tjiwi Kimia", "Dedicated Tjiwi", "Aliansi",
-    "Oncall TWB", "Oncall Trailer", "Dedicated Internusa",
-    "Dedicated J&T", "Dedicated IKK", "JNE & SPX", "Breakdown", "Other",
+    # TEK & TEJ groups first — Oncall Trailer on top
+    "Oncall Trailer",
+    "Dedicated Tjiwi",
+    "Dedicated Internusa",
+    "Dedicated J&T",
+    "Dedicated IKK",
+    # TEZ groups
+    "Tjiwi Kimia",
+    "Aliansi",
+    "Oncall TWB",
+    "JNE & SPX",
+    # Other
+    "Breakdown",
+    "Other",
 ]
 
 _HTML_TEMPLATE = r"""<!DOCTYPE html>

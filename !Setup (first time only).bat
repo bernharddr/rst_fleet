@@ -48,6 +48,6 @@ if not exist "credentials.json" (
 
 echo.
 echo ============================================
-echo   Setup complete! You can now run run.bat
+echo   Setup complete! You can now run !Run.bat
 echo ============================================
 pause
