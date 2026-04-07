@@ -17,7 +17,6 @@ from state.tracker import load_state, save_state, update_state
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 10
-TZ = ZoneInfo("Asia/Jakarta")
 
 # Shared state — read by WebSocket broadcaster
 current_vehicles: list[dict] = []

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: rst-fleet-monitor
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m server.app
+    plan: starter          # $7/month — needed for persistent disk + no sleep
+    disk:
+      name: fleet-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: GPS_DB_PATH
+        value: /data/gps_history.db
+      - key: GEOCODING_CACHE_PATH
+        value: /data/geocoding_cache.json
+      - key: VEHICLE_STATE_PATH
+        value: /data/vehicle_state.json
+      # Set these in Render dashboard (sensitive):
+      # GFLEET_USERNAME
+      # GFLEET_PASSWORD
+      # GFLEET_API_KEY
+      # GFLEET_BASE_URL
+      # ENGINE_ON_VOLTAGE_MV

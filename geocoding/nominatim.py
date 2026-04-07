@@ -9,7 +9,10 @@ from config.settings import NOMINATIM_USER_AGENT, NOMINATIM_DELAY_SECONDS
 
 logger = logging.getLogger(__name__)
 
-_CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "geocoding_cache.json")
+_CACHE_FILE = os.environ.get(
+    "GEOCODING_CACHE_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "geocoding_cache.json")
+)
 
 
 def _load_disk_cache() -> dict:

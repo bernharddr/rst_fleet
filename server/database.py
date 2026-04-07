@@ -10,10 +10,12 @@ Retention: auto-purge rows older than 90 days.
 
 import sqlite3
 import threading
+import os
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
-DB_PATH = Path("gps_history.db")
+# Allow overriding DB location via env var (for container/cloud deployments)
+DB_PATH = Path(os.environ.get("GPS_DB_PATH", "gps_history.db"))
 RETENTION_DAYS = 90
 HEARTBEAT_MINUTES = 10
 

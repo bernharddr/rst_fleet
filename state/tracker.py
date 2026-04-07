@@ -25,7 +25,10 @@ import threading
 
 logger = logging.getLogger(__name__)
 
-STATE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vehicle_state.json")
+STATE_FILE = os.environ.get(
+    "VEHICLE_STATE_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "vehicle_state.json")
+)
 
 # Shared lock so the background poller and the snapshot generator
 # never write vehicle_state.json concurrently.

@@ -1,0 +1,21 @@
+[Unit]
+Description=RST Fleet Monitor
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/rst-fleet
+EnvironmentFile=/home/ubuntu/rst-fleet/.env
+Environment=GPS_DB_PATH=/home/ubuntu/rst-fleet/data/gps_history.db
+Environment=GEOCODING_CACHE_PATH=/home/ubuntu/rst-fleet/data/geocoding_cache.json
+Environment=VEHICLE_STATE_PATH=/home/ubuntu/rst-fleet/data/vehicle_state.json
+ExecStart=/home/ubuntu/rst-fleet/venv/bin/python -m server.app
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

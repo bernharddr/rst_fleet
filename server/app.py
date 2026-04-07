@@ -204,15 +204,17 @@ async def websocket_endpoint(ws: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+    import os
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "server.app:app",
         host="0.0.0.0",
-        port=8000,
-        reload=False,
+        port=port,
+        reload=False,   # NEVER True — kills background threads
         log_level="info",
     )
