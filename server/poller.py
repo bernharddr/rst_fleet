@@ -16,7 +16,7 @@ from state.tracker import load_state, save_state, update_state
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 30  # GFleet API rate-limits at ~1 req/20s; 30s is safe
+POLL_INTERVAL_SECONDS = 60  # GFleet API fetch takes ~20s; need 40s+ gap after completion
 
 # Shared state — read by WebSocket broadcaster
 current_vehicles: list[dict] = []
@@ -136,7 +136,9 @@ def run_forever(poll_interval: int = POLL_INTERVAL_SECONDS) -> None:
                 logger.warning(f"Purge failed: {e}")
 
         elapsed = time.monotonic() - start
-        sleep_for = max(0, poll_interval - elapsed)
+        # Always sleep at least 40s after a successful fetch so the next request
+        # starts ≥40s after the previous one completed (GFleet rate-limit window).
+        sleep_for = max(40, poll_interval - elapsed)
         time.sleep(sleep_for)
 
 
