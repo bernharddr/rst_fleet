@@ -27,7 +27,7 @@ from gfleet.client import GFleetClient
 from geocoding.nominatim import NominatimGeocoder
 from sheets.locator import SheetLocator
 from sheets.writer import SheetWriter
-from state.tracker import load_state, save_state, update_state
+from state.tracker import load_state, save_state, update_state, haversine_km
 
 logging.basicConfig(
     level=logging.INFO,
@@ -113,26 +113,26 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
     location_index: dict[str, str] = {}
     for nopol, rec in nopol_index.items():
         if rec.lat != 0.0 or rec.lng != 0.0:
-            location_index[nopol] = location_by_coord.get((rec.lat, rec.lng), "LOKASI TIDAK DIKETAHUI")
+            lokasi = location_by_coord.get((rec.lat, rec.lng), "LOKASI TIDAK DIKETAHUI")
+            prev = vehicle_state.get(nopol)
+            if prev:
+                dist = haversine_km(prev["lat"], prev["lng"], rec.lat, rec.lng)
+                if dist >= 0.01:
+                    lokasi = f"{lokasi} ({dist:.2f}km)"
+            location_index[nopol] = lokasi
 
     if dry_run:
         logger.info("--- DRY RUN — Vehicle statuses ---")
         logger.info(f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENGINE':<6}  {'VOLTAGE':>7}  {'LAT':>9}  {'LNG':>10}  LOKASI")
         logger.info(f"  {'-'*20}  {'-'*15}  {'-'*6}  {'-'*7}  {'-'*9}  {'-'*10}  {'-'*25}")
         for nopol, rec in nopol_index.items():
-            prev = vehicle_state.get(nopol)
             status = status_index.get(nopol, "?")
             engine = "ON" if engine_index.get(nopol) else "OFF"
             voltage_v = rec.ext_voltage / 1000
             lokasi = location_index.get(nopol, "GPS Missing")
-            moved_marker = ""
-            if prev:
-                from state.tracker import haversine_km
-                dist = haversine_km(prev["lat"], prev["lng"], rec.lat, rec.lng)
-                moved_marker = f" ({dist:.2f}km)"
             logger.info(
                 f"  {nopol:<20}  {status:<15}  {engine:<6}  {voltage_v:>6.2f}V"
-                f"  {rec.lat:>9.4f}  {rec.lng:>10.4f}  {lokasi}{moved_marker}"
+                f"  {rec.lat:>9.4f}  {rec.lng:>10.4f}  {lokasi}"
             )
         logger.info("--- DRY RUN complete — no sheet updated ---")
         # Still update state so next dry run has correct prev positions
