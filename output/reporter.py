@@ -41,6 +41,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <title>RST Fleet Monitor</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:Arial,sans-serif;font-size:13px;background:#f0f2f5;padding:14px}
@@ -91,10 +92,27 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   #map-count{font-size:12px;color:#666}
   #map-view{height:calc(100vh - 200px);min-height:500px;border-radius:8px;
     border:1px solid #ddd}
+  #trail-panel{background:#fff;border-radius:8px;padding:12px 16px;
+    box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:10px;display:none}
+  #trail-panel h3{font-size:13px;margin-bottom:8px;color:#2c3e50}
+  #trail-panel select,#trail-panel input{padding:5px 8px;border:1px solid #ccc;
+    border-radius:5px;font-size:13px;margin-right:6px}
+  #trail-panel button{padding:6px 14px;background:#2c3e50;color:#fff;border:none;
+    border-radius:5px;cursor:pointer;font-size:13px}
+  #trail-panel button:hover{background:#34495e}
+  #trail-status{font-size:12px;color:#666;margin-left:8px}
+  #live-badge{display:none;align-items:center;gap:5px;font-size:12px;
+    color:#155724;background:#d4edda;padding:4px 10px;border-radius:12px}
+  .live-dot{width:8px;height:8px;background:#28a745;border-radius:50%;
+    animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
 <body>
-<h1>&#x1F69B;&nbsp;RST Fleet Monitor</h1>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+  <h1 style="margin:0">&#x1F69B;&nbsp;RST Fleet Monitor</h1>
+  <div id="live-badge"><span class="live-dot"></span> LIVE</div>
+</div>
 
 <div class="tabs">
   <button class="tab-btn active" data-tab="table" onclick="switchTab('table')">&#x1F4CB;&nbsp;Tabel</button>
@@ -146,7 +164,30 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       </select>
     </label>
     <span id="map-count" class="ts"></span>
+    <button onclick="document.getElementById('trail-panel').style.display=document.getElementById('trail-panel').style.display==='none'?'block':'none'"
+      style="padding:5px 12px;background:#1a6b3a;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px">
+      &#x1F4CD;&nbsp;Jejak Rute
+    </button>
   </div>
+
+  <div id="trail-panel">
+    <h3>&#x1F4CD; Tampilkan Jejak Rute</h3>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+      <select id="trail-nopol"><option value="">— pilih unit —</option></select>
+      <select id="trail-hours">
+        <option value="1">1 jam</option>
+        <option value="6">6 jam</option>
+        <option value="24" selected>24 jam</option>
+        <option value="72">3 hari</option>
+        <option value="168">7 hari</option>
+        <option value="720">30 hari</option>
+      </select>
+      <button onclick="loadTrail()">Tampilkan</button>
+      <button onclick="clearTrail()" style="background:#666">Hapus</button>
+      <span id="trail-status"></span>
+    </div>
+  </div>
+
   <div id="map-view"></div>
 </div><!-- #tab-map -->
 
@@ -269,8 +310,43 @@ function render(){
   }
 }
 
+// ── LIVE WebSocket ────────────────────────────────────────
+let ws=null, liveMarkers={};
+
+function connectWS(){
+  if(window.location.protocol==='file:')return; // offline mode
+  const url='ws://'+window.location.host+'/ws';
+  try{
+    ws=new WebSocket(url);
+    ws.onopen=()=>{
+      document.getElementById('live-badge').style.display='flex';
+      console.log('WS connected');
+    };
+    ws.onmessage=(evt)=>{
+      const data=JSON.parse(evt.data);
+      if(data.type==='positions')updateLiveMarkers(data.vehicles);
+    };
+    ws.onclose=()=>{
+      document.getElementById('live-badge').style.display='none';
+      setTimeout(connectWS,5000);
+    };
+    ws.onerror=()=>ws.close();
+  }catch(e){}
+}
+
+function updateLiveMarkers(vehicles){
+  if(!map||!markersLayer)return;
+  vehicles.forEach(v=>{
+    if(!v.lat||!v.lng||v.lat===0&&v.lng===0)return;
+    if(liveMarkers[v.nopol]){
+      liveMarkers[v.nopol].setLatLng([v.lat,v.lng]);
+    }
+  });
+}
+
 // ── MAP VIEW ──────────────────────────────────────────────
 let map=null, markersLayer=null;
+let trailLayer=null, trailDecorator=null;
 const STATUS_EMOJI={'Jalan':'🚛','Idle':'🚚','Berhenti':'🅿️','GPS Missing':'❓'};
 const STATUS_COLOR={'Jalan':'#28a745','Idle':'#ffc107','Berhenti':'#dc3545','GPS Missing':'#aaa'};
 
@@ -299,6 +375,7 @@ function renderMap(){
     visible.push(v);
   });
 
+  liveMarkers={};
   visible.forEach(v=>{
     const emoji=STATUS_EMOJI[v.status]||'❓';
     const color=STATUS_COLOR[v.status]||'#aaa';
@@ -312,15 +389,32 @@ function renderMap(){
       iconAnchor:[28,32], iconSize:[56,40],
     });
     const m=L.marker([v.lat,v.lng],{icon});
+    liveMarkers[v.nopol]=m;
     const detil=v.lokasi_detil?`<br><b style="color:#155724">${v.lokasi_detil}</b>`:'';
     m.bindPopup(`<b>${v.nopol}</b><br>
       Status: <b>${v.status}</b><br>
       Engine: ${v.engine_on?'<b style="color:green">ON</b>':'OFF'}<br>
       Volt: ${v.voltage_v}V &nbsp; Speed: ${v.speed_kmh} km/h<br>
       ODO: ${(v.odo_km||0).toLocaleString('id-ID')} km<br>
-      ${v.lokasi||''}${detil}`);
+      ${v.lokasi||''}${detil}<br>
+      <button onclick="selectTrailUnit('${v.nopol}')"
+        style="margin-top:6px;padding:3px 10px;background:#1a6b3a;color:#fff;
+        border:none;border-radius:4px;cursor:pointer;font-size:11px">
+        &#x1F4CD; Lihat Jejak
+      </button>`);
     markersLayer.addLayer(m);
   });
+
+  // Populate trail NOPOL selector
+  const sel=document.getElementById('trail-nopol');
+  const prev=sel.value;
+  sel.innerHTML='<option value="">— pilih unit —</option>';
+  visible.forEach(v=>{
+    const o=document.createElement('option');
+    o.value=v.nopol; o.textContent=v.nopol;
+    sel.appendChild(o);
+  });
+  if(prev)sel.value=prev;
 
   // Auto-fit to visible markers
   if(visible.length>0&&!search&&filterGrp==='ALL'){
@@ -346,11 +440,74 @@ function switchTab(tab){
   }
 }
 
+// ── ROUTE TRAIL ──────────────────────────────────────────
+function selectTrailUnit(nopol){
+  document.getElementById('trail-nopol').value=nopol;
+  document.getElementById('trail-panel').style.display='block';
+  switchTab('map');
+  loadTrail();
+}
+
+function clearTrail(){
+  if(trailLayer){map.removeLayer(trailLayer);trailLayer=null;}
+  if(trailDecorator){map.removeLayer(trailDecorator);trailDecorator=null;}
+  document.getElementById('trail-status').textContent='';
+}
+
+async function loadTrail(){
+  const nopol=document.getElementById('trail-nopol').value;
+  const hours=document.getElementById('trail-hours').value;
+  if(!nopol)return;
+  if(window.location.protocol==='file:'){
+    document.getElementById('trail-status').textContent='⚠ Jejak hanya tersedia di mode server';
+    return;
+  }
+  document.getElementById('trail-status').textContent='Memuat...';
+  clearTrail();
+  try{
+    const res=await fetch(`/api/trail/${encodeURIComponent(nopol)}?hours=${hours}`);
+    const data=await res.json();
+    const pts=data.points||[];
+    if(pts.length<2){
+      document.getElementById('trail-status').textContent=`Tidak ada data jejak (${pts.length} titik)`;
+      return;
+    }
+    const latlngs=pts.map(p=>[p.lat,p.lng]);
+    trailLayer=L.polyline(latlngs,{color:'#00aa44',weight:4,opacity:0.8}).addTo(map);
+
+    // Arrow decorators
+    if(L.PolylineDecorator){
+      trailDecorator=L.polylineDecorator(trailLayer,{
+        patterns:[{
+          offset:'5%', repeat:'8%',
+          symbol:L.Symbol.arrowHead({pixelSize:10,pathOptions:{color:'#00aa44',fillOpacity:1,weight:1}})
+        }]
+      }).addTo(map);
+    }
+
+    // Start/end markers
+    const first=pts[0],last=pts[pts.length-1];
+    const fmtTime=t=>{try{return new Date(t).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',
+      day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return t;}};
+    L.circleMarker([first.lat,first.lng],{radius:7,color:'#0066cc',fillColor:'#0066cc',fillOpacity:1})
+      .bindPopup(`<b>Start</b><br>${fmtTime(first.gps_time)}<br>Speed: ${first.speed} km/h`).addTo(map);
+    L.circleMarker([last.lat,last.lng],{radius:7,color:'#cc0000',fillColor:'#cc0000',fillOpacity:1})
+      .bindPopup(`<b>End</b><br>${fmtTime(last.gps_time)}<br>Speed: ${last.speed} km/h`).addTo(map);
+
+    map.fitBounds(trailLayer.getBounds(),{padding:[40,40]});
+    document.getElementById('trail-status').textContent=
+      `${pts.length} titik GPS · ${fmtTime(first.gps_time)} → ${fmtTime(last.gps_time)}`;
+  }catch(e){
+    document.getElementById('trail-status').textContent='Error: '+e.message;
+  }
+}
+
 window.onload=function(){
   // Populate map group filter
   const sel=document.getElementById('map-grp-filter');
   ORDER.forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=g;sel.appendChild(o);});
   render();
+  connectWS();
 };
 </script>
 </body>
