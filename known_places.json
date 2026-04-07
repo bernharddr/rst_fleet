@@ -1,0 +1,25 @@
+[
+  {
+    "_comment": "Tambahkan lokasi pelanggan/pabrik di sini. lat/lng = koordinat tengah, radius_km = jarak deteksi.",
+    "_example": true
+  },
+  {
+    "_note": "Verifikasi koordinat Indah Kiat — buka Google Maps, cari PT Indah Kiat Pulp & Paper Serang, klik lokasi, copy koordinat",
+    "name": "INDAH KIAT PULP & PAPER - SERANG",
+    "lat": -6.1180,
+    "lng": 106.2830,
+    "radius_km": 2.0
+  },
+  {
+    "name": "PELABUHAN TANJUNG PRIOK",
+    "lat": -6.1050,
+    "lng": 106.8800,
+    "radius_km": 2.5
+  },
+  {
+    "name": "PELABUHAN MERAK",
+    "lat": -5.9244,
+    "lng": 105.9955,
+    "radius_km": 2.0
+  }
+]

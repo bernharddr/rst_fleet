@@ -1,3 +1,6 @@
+import json
+import math
+import os
 import time
 import logging
 import requests
@@ -25,6 +28,9 @@ LOCATION_FIELD_ORDER = (
     "state",
 )
 
+# Fields that indicate a specific named facility (highest priority)
+FACILITY_FIELDS = {"amenity", "building", "industrial", "retail", "commercial"}
+
 # Prefixes that indicate a road name — skip these when parsing display_name
 ROAD_PREFIXES = ("jalan", "jl.", "jl ", "gang", "gg.", "tol ", "jalan tol")
 
@@ -32,13 +38,38 @@ ROAD_PREFIXES = ("jalan", "jl.", "jl ", "gang", "gg.", "tol ", "jalan tol")
 IGNORE_VALUES = {"indonesia", "java", "jawa", "kalimantan", "sumatra", "sumatera",
                  "sulawesi", "bali", "papua", "nusa tenggara"}
 
+_KNOWN_PLACES_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "known_places.json")
+
+
+def _load_known_places() -> list[dict]:
+    """Load user-defined geofence list from known_places.json."""
+    if not os.path.exists(_KNOWN_PLACES_FILE):
+        return []
+    try:
+        with open(_KNOWN_PLACES_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return [p for p in data if not str(p.get("name", "")).startswith("_")]
+    except Exception as e:
+        logger.warning(f"Could not load known_places.json: {e}")
+        return []
+
+
+def _haversine_km(lat1, lng1, lat2, lng2) -> float:
+    R = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi, dlambda = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
 
 class NominatimGeocoder:
     """
     Reverse geocodes lat/lng using OSM Nominatim.
 
-    Uses a simple dict cache to avoid re-requesting the same coordinates.
-    Throttles to ≤1 request/second per OSM policy.
+    Two-pass strategy:
+      1. Check known_places.json geofences (user-defined customer sites)
+      2. OSM zoom=16 for facility-level names (factories, ports, depots)
+      3. Fall back to OSM zoom=12 if zoom=16 only returns a road
     """
 
     BASE_URL = "https://nominatim.openstreetmap.org/reverse"
@@ -46,6 +77,9 @@ class NominatimGeocoder:
     def __init__(self):
         self._last_request_time: float = 0.0
         self._cache: dict[tuple[float, float], str] = {}
+        self._known_places = _load_known_places()
+        if self._known_places:
+            logger.info(f"Loaded {len(self._known_places)} known places from known_places.json")
 
     def _throttle(self):
         elapsed = time.monotonic() - self._last_request_time
@@ -53,33 +87,58 @@ class NominatimGeocoder:
             time.sleep(NOMINATIM_DELAY_SECONDS - elapsed)
         self._last_request_time = time.monotonic()
 
+    def _check_known_places(self, lat: float, lng: float) -> str | None:
+        """Return place name if within any defined geofence, else None."""
+        for place in self._known_places:
+            dist = _haversine_km(lat, lng, place["lat"], place["lng"])
+            if dist <= place.get("radius_km", 1.0):
+                return place["name"].upper()
+        return None
+
+    def _query_osm(self, lat: float, lng: float, zoom: int) -> tuple[dict, str]:
+        """Perform one OSM reverse geocode request. Returns (address, display_name)."""
+        self._throttle()
+        params = {
+            "lat": lat, "lon": lng,
+            "format": "json",
+            "zoom": zoom,
+            "addressdetails": 1,
+        }
+        resp = requests.get(
+            self.BASE_URL, params=params,
+            headers={"User-Agent": NOMINATIM_USER_AGENT},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("address", {}), data.get("display_name", "")
+
     def reverse_geocode(self, lat: float, lng: float) -> str:
         key = (round(lat, 4), round(lng, 4))
         if key in self._cache:
             return self._cache[key]
 
-        self._throttle()
-        params = {
-            "lat": key[0],
-            "lon": key[1],
-            "format": "json",
-            "zoom": 12,
-            "addressdetails": 1,
-        }
+        # 1. Check user-defined geofences first
+        geofence_hit = self._check_known_places(lat, lng)
+        if geofence_hit:
+            logger.info(f"Geofence hit ({lat},{lng}) → '{geofence_hit}'")
+            self._cache[key] = geofence_hit
+            return geofence_hit
+
         try:
-            resp = requests.get(
-                self.BASE_URL,
-                params=params,
-                headers={"User-Agent": NOMINATIM_USER_AGENT},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            address = data.get("address", {})
-            display_name = data.get("display_name", "")
-            result = self._extract_location_name(address, display_name)
-            # Temporarily log at INFO so we can see what's happening
-            logger.info(f"OSM ({lat},{lng}) → '{result}'  addr_keys={list(address.keys())}  display='{display_name[:80]}'")
+            # 2. Try zoom=16 — picks up named industrial/commercial facilities
+            address16, display16 = self._query_osm(key[0], key[1], zoom=16)
+            result = self._extract_location_name(address16, display16)
+            has_facility = any(k in address16 for k in FACILITY_FIELDS)
+
+            # 3. If zoom=16 found no facility and result is generic, fall back to zoom=12
+            if not has_facility and result == "LOKASI TIDAK DIKETAHUI":
+                address12, display12 = self._query_osm(key[0], key[1], zoom=12)
+                result = self._extract_location_name(address12, display12)
+                logger.info(f"OSM z16→z12 ({lat},{lng}) → '{result}'")
+            else:
+                logger.info(f"OSM z16 ({lat},{lng}) → '{result}'  facility={has_facility}")
+
         except Exception as e:
             logger.warning(f"OSM geocoding FAILED for ({lat},{lng}): {e}")
             result = "LOKASI TIDAK DIKETAHUI"
@@ -96,7 +155,6 @@ class NominatimGeocoder:
                 return canonical
 
         # 2. Walk fields from most → least granular, collect up to 3 unique values.
-        #    village comes before suburb so "Rorotan" is picked over "Cilincing".
         parts: list[str] = []
         for key in LOCATION_FIELD_ORDER:
             val = address.get(key, "").strip()
