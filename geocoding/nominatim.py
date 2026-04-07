@@ -15,13 +15,15 @@ KNOWN_LOCATIONS = {
     "depo delta": "DEPO DELTA",
 }
 
-# Address fields to try in priority order — comprehensive for Indonesian OSM data
-ADDRESS_FIELD_PRIORITY = (
+# Level 1 — most granular place name
+LEVEL1_FIELDS = (
     "amenity", "building", "industrial", "retail", "commercial",
-    "hamlet", "quarter", "suburb", "neighbourhood",
-    "village", "town", "municipality",
-    "city_district", "city", "county", "state_district",
+    "hamlet", "quarter", "suburb", "neighbourhood", "village", "town", "municipality",
 )
+# Level 2 — city / regency
+LEVEL2_FIELDS = ("city_district", "city", "subdistrict", "regency", "county")
+# Level 3 — province / state
+LEVEL3_FIELDS = ("state",)
 
 # Prefixes that indicate a road name — skip these when parsing display_name
 ROAD_PREFIXES = ("jalan", "jl.", "jl ", "gang", "gg.", "tol ", "jalan tol")
@@ -93,25 +95,47 @@ class NominatimGeocoder:
             if keyword in full_text:
                 return canonical
 
-        # 2. Try address fields in priority order
-        for key in ADDRESS_FIELD_PRIORITY:
+        # 2. Build up to 3-level name: most granular → city/regency → province
+        parts: list[str] = []
+
+        for key in LEVEL1_FIELDS:
             val = address.get(key, "").strip()
             if val and val.lower() not in IGNORE_VALUES:
-                return val.upper()
+                parts.append(val.upper())
+                break
 
-        # 3. Parse display_name — skip road segments, return first useful segment
-        # e.g. "Jl. Raya Bandung, Leles, Kabupaten Garut, Jawa Barat, Indonesia"
-        #       → skip "Jl. Raya Bandung" → return "LELES"
+        for key in LEVEL2_FIELDS:
+            val = address.get(key, "").strip()
+            if val and val.lower() not in IGNORE_VALUES:
+                if val.upper() not in parts:
+                    parts.append(val.upper())
+                break
+
+        for key in LEVEL3_FIELDS:
+            val = address.get(key, "").strip()
+            if val and val.lower() not in IGNORE_VALUES:
+                if val.upper() not in parts:
+                    parts.append(val.upper())
+                break
+
+        if parts:
+            return ", ".join(parts)
+
+        # 3. Fallback: parse display_name segments, skip roads, take first 2 useful parts
         if display_name:
-            parts = [p.strip() for p in display_name.split(",")]
-            for part in parts:
-                lower = part.lower()
+            result_parts = []
+            for seg in [p.strip() for p in display_name.split(",")]:
+                lower = seg.lower()
                 if lower in IGNORE_VALUES:
                     continue
                 if any(lower.startswith(prefix) for prefix in ROAD_PREFIXES):
                     continue
-                if part and len(part) > 2:
-                    return part.upper()
+                if seg and len(seg) > 2:
+                    result_parts.append(seg.upper())
+                    if len(result_parts) >= 2:
+                        break
+            if result_parts:
+                return ", ".join(result_parts)
 
         return "LOKASI TIDAK DIKETAHUI"
 
