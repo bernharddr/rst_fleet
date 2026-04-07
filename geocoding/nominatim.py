@@ -15,15 +15,15 @@ KNOWN_LOCATIONS = {
     "depo delta": "DEPO DELTA",
 }
 
-# Level 1 — most granular place name
-LEVEL1_FIELDS = (
+# Fields ordered from most granular → least granular.
+# We walk this list and collect the first 3 unique non-ignored values.
+LOCATION_FIELD_ORDER = (
     "amenity", "building", "industrial", "retail", "commercial",
-    "hamlet", "quarter", "suburb", "neighbourhood", "village", "town", "municipality",
+    "hamlet", "quarter", "neighbourhood", "village",
+    "suburb", "town", "municipality",
+    "city_district", "city", "subdistrict", "regency", "county",
+    "state",
 )
-# Level 2 — city / regency
-LEVEL2_FIELDS = ("city_district", "city", "subdistrict", "regency", "county")
-# Level 3 — province / state
-LEVEL3_FIELDS = ("state",)
 
 # Prefixes that indicate a road name — skip these when parsing display_name
 ROAD_PREFIXES = ("jalan", "jl.", "jl ", "gang", "gg.", "tol ", "jalan tol")
@@ -95,27 +95,15 @@ class NominatimGeocoder:
             if keyword in full_text:
                 return canonical
 
-        # 2. Build up to 3-level name: most granular → city/regency → province
+        # 2. Walk fields from most → least granular, collect up to 3 unique values.
+        #    village comes before suburb so "Rorotan" is picked over "Cilincing".
         parts: list[str] = []
-
-        for key in LEVEL1_FIELDS:
-            val = address.get(key, "").strip()
-            if val and val.lower() not in IGNORE_VALUES:
-                parts.append(val.upper())
-                break
-
-        for key in LEVEL2_FIELDS:
+        for key in LOCATION_FIELD_ORDER:
             val = address.get(key, "").strip()
             if val and val.lower() not in IGNORE_VALUES:
                 if val.upper() not in parts:
                     parts.append(val.upper())
-                break
-
-        for key in LEVEL3_FIELDS:
-            val = address.get(key, "").strip()
-            if val and val.lower() not in IGNORE_VALUES:
-                if val.upper() not in parts:
-                    parts.append(val.upper())
+            if len(parts) >= 3:
                 break
 
         if parts:
