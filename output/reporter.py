@@ -102,6 +102,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <th>STATUS</th>
       <th>ENGINE</th>
       <th>VOLT</th>
+      <th>SPEED</th>
+      <th>ODO (km)</th>
       <th>LOKASI</th>
       <th style="background:#1a6b3a">LOKASI DETIL</th>
       <th id="cmp-col-hdr" style="display:none;min-width:160px">LOKASI SEBELUMNYA</th>
@@ -134,7 +136,7 @@ function rc(st){
 
 function render(){
   if(!SNAPSHOTS.length){
-    document.getElementById('tbody').innerHTML='<tr><td colspan="8" style="text-align:center;padding:30px;color:#999">Belum ada data.</td></tr>';
+    document.getElementById('tbody').innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:#999">Belum ada data.</td></tr>';
     return;
   }
   const cur=SNAPSHOTS[0];
@@ -189,7 +191,7 @@ function render(){
     const vs=grps[grp];
     if(!vs||!vs.length)return;
     vs.sort((a,b)=>a.nopol.localeCompare(b.nopol));
-    html+=`<tr class="gr-header"><td colspan="8">&#x1F4CC;&nbsp;${grp} &mdash; ${vs.length} unit</td></tr>`;
+    html+=`<tr class="gr-header"><td colspan="10">&#x1F4CC;&nbsp;${grp} &mdash; ${vs.length} unit</td></tr>`;
     vs.forEach((v,i)=>{
       const pv=pm[v.nopol];
       const locChanged=pv&&stripDist(v.lokasi)!==stripDist(pv.lokasi);
@@ -204,12 +206,16 @@ function render(){
       if(prev){cmpLoc=pv?(pv.lokasi||'-'):'<i style="color:#aaa">tidak ada data</i>';}
       const detil=v.lokasi_detil||'';
       const detilHtml=detil?`<span style="font-weight:bold;color:#155724">${detil}</span>`:'<span style="color:#ccc">—</span>';
+      const speedHtml=v.speed_kmh>0?`<b style="color:#1565c0">${v.speed_kmh} km/h</b>`:`<span style="color:#aaa">0</span>`;
+      const odoHtml=v.odo_km>0?v.odo_km.toLocaleString('id-ID',{minimumFractionDigits:1,maximumFractionDigits:1})+' km':'—';
       html+=`<tr class="${rowCls}">
         <td style="color:#999;font-size:11px">${i+1}</td>
         <td><strong>${v.nopol}</strong></td>
         <td>${stHtml}</td>
         <td>${v.engine_on?'<b style="color:#28a745">ON</b>':'<span style="color:#aaa">OFF</span>'}</td>
         <td style="white-space:nowrap">${v.voltage_v!=null?v.voltage_v.toFixed(2)+'V':'-'}</td>
+        <td style="white-space:nowrap">${speedHtml}</td>
+        <td style="white-space:nowrap;font-size:12px">${odoHtml}</td>
         <td>${locHtml}</td>
         <td>${detilHtml}</td>
         ${prev?`<td class="prev-lokasi">${cmpLoc}</td>`:''}

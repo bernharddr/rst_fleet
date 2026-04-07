@@ -126,6 +126,8 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
             "status": status_index.get(nopol, "GPS Missing"),
             "engine_on": engine_index.get(nopol, False),
             "voltage_v": round(rec.ext_voltage / 1000, 2),
+            "speed_kmh": round(rec.speed, 1),
+            "odo_km": round(rec.odo, 1),
             "lat": rec.lat,
             "lng": rec.lng,
             "lokasi": location_index.get(nopol, "GPS Missing"),
@@ -142,8 +144,8 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
         for nopol, rec in nopol_index.items():
             groups[fleet_assignments.get(nopol, "Other")].append((nopol, rec))
 
-        header = f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENG':<4}  {'VOLT':>7}  {'LOKASI':<40}  LOKASI DETIL"
-        divider = f"  {'-'*20}  {'-'*15}  {'-'*4}  {'-'*7}  {'-'*40}  {'-'*25}"
+        header = f"  {'NOPOL':<20}  {'STATUS':<15}  {'ENG':<4}  {'VOLT':>7}  {'SPD':>6}  {'ODO':>10}  {'LOKASI':<40}  LOKASI DETIL"
+        divider = f"  {'-'*20}  {'-'*15}  {'-'*4}  {'-'*7}  {'-'*6}  {'-'*10}  {'-'*40}  {'-'*25}"
 
         logger.info("--- DRY RUN — Vehicle statuses ---")
         for assignment in ASSIGNMENT_ORDER:
@@ -160,7 +162,8 @@ def run(slot: str = None, sheet_id: str = None, dry_run: bool = False) -> None:
                 lokasi = location_index.get(nopol, "GPS Missing")
                 detil = detail_index.get(nopol) or "-"
                 logger.info(
-                    f"  {nopol:<20}  {status:<15}  {engine:<4}  {voltage_v:>6.2f}V  {lokasi:<40}  {detil}"
+                    f"  {nopol:<20}  {status:<15}  {engine:<4}  {voltage_v:>6.2f}V"
+                    f"  {rec.speed:>5.1f}k  {rec.odo:>10,.1f}  {lokasi:<40}  {detil}"
                 )
         logger.info("\n--- DRY RUN complete — HTML report saved ---")
 
