@@ -4,7 +4,14 @@
     "_howto": "Buka Google Maps → cari lokasi → klik titik → copy koordinat → update lat/lng di sini"
   },
 
-  {"_section": "=== PABRIK KERTAS ==="},
+  {"_section": "=== PABRIK ==="},
+  {
+    "name": "IKPP - SERANG",
+    "lat": -6.1254,
+    "lng": 106.2892,
+    "radius_km": 2.0,
+    "_note": "Indah Kiat Pulp & Paper, Jl. Raya Serang KM 76, Kragilan, Serang. Source: GEM.wiki"
+  },
   {
     "name": "PINDO DELI 1 - KARAWANG",
     "lat": -6.3225,
@@ -14,47 +21,155 @@
   },
   {
     "name": "PINDO DELI 2 - KARAWANG",
-    "lat": -6.3768,
-    "lng": 107.3423,
+    "lat": -6.3854,
+    "lng": 107.3436,
     "radius_km": 2.5,
-    "_note": "Mill 2, Desa Kutamekar, Teluk Ciampel, Karawang Timur (~450 ha). Source: industryabout.com"
+    "_note": "Mill 2, Desa Kutamekar BTB 6-9, Teluk Ciampel, Karawang Timur (~450 ha). Source: GEM.wiki"
   },
   {
     "name": "PINDO DELI 3 - PERAWANG",
     "lat": 0.6200,
     "lng": 101.5600,
     "radius_km": 1.5,
-    "_note": "Mill 3, Km 26 Jl. Raya Minas-Perawang, Desa Pinang Sebatang, Kab. Siak, Riau"
+    "_note": "Mill 3, Km 26 Jl. Raya Minas-Perawang, Pinang Sebatang, Kab. Siak, Riau",
+    "_verify": true
   },
   {
-    "name": "INDAH KIAT PULP & PAPER - SERANG",
-    "lat": -6.1180,
-    "lng": 106.2830,
-    "radius_km": 2.0,
+    "name": "PINDO DELI 4 - IKK KARAWANG",
+    "lat": -6.3700,
+    "lng": 107.3700,
+    "radius_km": 1.5,
+    "_note": "Karawang area (IKK project, dekat Pindo mills). Koordinat perkiraan — verifikasi diperlukan",
+    "_verify": true
+  },
+  {
+    "name": "UNIVENUS - CIKUPA",
+    "lat": -6.2225,
+    "lng": 106.5450,
+    "radius_km": 0.5,
+    "_note": "Jl. Raya Serang KM 12, Sukadamai, Cikupa, Tangerang. Source: Wikimapia"
+  },
+  {
+    "name": "UNIVENUS - SERANG",
+    "lat": -6.1300,
+    "lng": 106.2800,
+    "radius_km": 0.75,
+    "_note": "Jl. Raya Serang-Jakarta KM 74, Sukamaju, Kec. Kibin, Serang, Banten",
+    "_verify": true
+  },
+  {
+    "name": "TJM CIKANDE (SHS)",
+    "lat": -6.2026,
+    "lng": 106.4537,
+    "radius_km": 1.0,
+    "_note": "Modern Cikande Industrial Estate, Kec. Cikande, Serang, Banten",
+    "_verify": true
+  },
+  {
+    "name": "TJM SERANG (JAS)",
+    "lat": -6.1200,
+    "lng": 106.1500,
+    "radius_km": 1.0,
+    "_note": "Serang, Banten. Koordinat perkiraan — verifikasi diperlukan",
+    "_verify": true
+  },
+  {
+    "name": "KMK - CIKUPA",
+    "lat": -6.2380,
+    "lng": 106.5350,
+    "radius_km": 0.5,
+    "_note": "Jl. Cikupa Mas Raya No.17, Kawasan Industri Cikupa Mas, Talaga, Cikupa, Tangerang"
+  },
+  {
+    "name": "MITSUBISHI CIKARANG (SENOPATI)",
+    "lat": -6.3500,
+    "lng": 107.1700,
+    "radius_km": 0.5,
+    "_note": "GIIC Blok CH No.1-2, Kota Deltamas, Cikarang Pusat, Kab. Bekasi",
     "_verify": true
   },
 
-  {"_section": "=== DEPO / GARASI ==="},
+  {"_section": "=== DEPO ==="},
   {
     "name": "GARASI ROROTAN",
     "lat": -6.1527,
     "lng": 106.9563,
     "radius_km": 0.3,
-    "_note": "Centroid Kelurahan Rorotan, Cilincing. Verifikasi lokasi garasi spesifik di Google Maps"
+    "_note": "Centroid Kelurahan Rorotan, Cilincing. Verifikasi lokasi garasi spesifik di Google Maps",
+    "_verify": true
   },
   {
-    "name": "DEPO KBN CAKUNG",
-    "lat": -6.1306,
-    "lng": 106.9319,
-    "radius_km": 0.75,
-    "_note": "Jl. Raya Cakung-Cilincing, Sukapura, Cilincing. Source: findlatitudeandlongitude.com"
+    "name": "SEACON",
+    "lat": -6.1067,
+    "lng": 106.9467,
+    "radius_km": 0.3,
+    "_note": "PT Seacon Bintang Sejahtera, KBN Cakung Blok A, Jl. Raya Cakung Cilincing, Jakarta 14140"
   },
   {
-    "name": "DEPO KBN MARUNDA",
-    "lat": -6.0490,
+    "name": "CCIS CAKUNG",
+    "lat": -6.1122,
+    "lng": 106.9503,
+    "radius_km": 0.3,
+    "_note": "PT CMA CGM Inland Services Indonesia, Jl. Bali SBU, KBN Cakung Blok B.01, Cilincing, Jakut"
+  },
+  {
+    "name": "CCIS MARUNDA",
+    "lat": -6.1100,
+    "lng": 106.9100,
+    "radius_km": 0.5,
+    "_note": "PT CMA CGM Inland Services Indonesia, Jl. Medan Blok CIII No.3, KBN Marunda, Cilincing, Jakut",
+    "_verify": true
+  },
+  {
+    "name": "DELTA KONTAINER DEPOT",
+    "lat": -6.1200,
+    "lng": 106.9300,
+    "radius_km": 0.3,
+    "_note": "PT Delta Kontainer Depot, Jl. Madya Kebantenan No.8, Semper Timur, Jakarta 14130"
+  },
+  {
+    "name": "SIL DEPO",
+    "lat": -6.1200,
+    "lng": 106.9050,
+    "radius_km": 0.3,
+    "_note": "PT Sarana Inti Logitama, Jl. Palembang/Banda Aceh No.01, KBN Marunda, Cilincing, Jakut"
+  },
+  {
+    "name": "TUNGYA",
+    "lat": -6.1150,
     "lng": 106.9500,
-    "radius_km": 1.5,
-    "_note": "Jl. Raya Marunda No.1, Cilincing, Jakarta Utara. 413-ha industrial estate"
+    "radius_km": 0.3,
+    "_note": "PT Tungya Collins Terminal, Jl. Cakung Industri Selatan I No.12, Rorotan, Cilincing, Jakut"
+  },
+  {
+    "name": "GTM - MARUNDA",
+    "lat": -6.1050,
+    "lng": 106.9200,
+    "radius_km": 0.5,
+    "_note": "Global Terminal Marunda, Jl. Ujung Pandang No.2 Blok B, KBN Marunda, Cilincing, Jakut"
+  },
+  {
+    "name": "BUNGA PLUM",
+    "lat": -6.1800,
+    "lng": 106.9450,
+    "radius_km": 0.3,
+    "_note": "Jl. No.9, RW.8, Cakung Barat, Cakung, Jakarta Timur 14140",
+    "_verify": true
+  },
+  {
+    "name": "BSA",
+    "lat": -6.1100,
+    "lng": 106.9500,
+    "radius_km": 0.3,
+    "_note": "Jl. Raya Cakung Cilincing KM 3, RT.9/RW.8, Jakarta 13910",
+    "_verify": true
+  },
+  {
+    "name": "KBN CAKUNG",
+    "lat": -6.1050,
+    "lng": 106.9450,
+    "radius_km": 0.75,
+    "_note": "Kawasan Berikat Nusantara Cakung, Jl. Raya Cakung Cilincing, Tanjung Priok, Jakut"
   },
   {
     "name": "DEPO MTCON",
@@ -62,13 +177,6 @@
     "lng": 106.9306,
     "radius_km": 0.5,
     "_note": "PT Masaji Tatanan Kontainer, Jl. Raya Cakung No.15, Semper Timur, Cilincing"
-  },
-  {
-    "name": "DEPO TUNGYA",
-    "lat": -6.1380,
-    "lng": 106.9600,
-    "radius_km": 0.5,
-    "_note": "PT Tungya Collins Terminal, Jl. Cakung Industri Selatan I No.12, Rorotan, Cilincing"
   },
 
   {"_section": "=== PELABUHAN ==="},
@@ -84,7 +192,7 @@
     "lat": -6.1019,
     "lng": 106.9042,
     "radius_km": 1.0,
-    "_note": "Jakarta International Container Terminal, Jl. Sulawesi Ujung No.1, Tanjung Priok. Confidence: high"
+    "_note": "Jakarta International Container Terminal, Jl. Sulawesi Ujung No.1, Tanjung Priok"
   },
   {
     "name": "PELABUHAN TANJUNG PRIOK",
