@@ -21,32 +21,46 @@ import json
 import logging
 import math
 import os
+import threading
 
 logger = logging.getLogger(__name__)
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vehicle_state.json")
+
+# Shared lock so the background poller and the snapshot generator
+# never write vehicle_state.json concurrently.
+STATE_LOCK = threading.Lock()
 
 # Movement threshold in kilometres
 MOVEMENT_THRESHOLD_KM = 1.0
 
 
 def load_state() -> dict:
-    if not os.path.exists(STATE_FILE):
-        return {}
-    try:
-        with open(STATE_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.warning(f"Could not load vehicle state: {e}")
-        return {}
+    with STATE_LOCK:
+        if not os.path.exists(STATE_FILE):
+            return {}
+        try:
+            with open(STATE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load vehicle state: {e}")
+            return {}
 
 
 def save_state(state: dict) -> None:
-    try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not save vehicle state: {e}")
+    # Write to a temp file then atomically replace to prevent corruption
+    tmp = STATE_FILE + ".tmp"
+    with STATE_LOCK:
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, STATE_FILE)
+        except Exception as e:
+            logger.warning(f"Could not save vehicle state: {e}")
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 _ARROWS = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]  # N NE E SE S SW W NW

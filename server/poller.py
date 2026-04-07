@@ -8,12 +8,10 @@ Runs as a background thread; exposes `current_vehicles` dict for WebSocket broad
 import logging
 import threading
 import time
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from gfleet.auth import GFleetAuthenticator
 from gfleet.client import GFleetClient
-from server.database import insert_position
+from server.database import insert_position, purge_old
 from state.tracker import load_state, save_state, update_state
 
 logger = logging.getLogger(__name__)
@@ -105,6 +103,8 @@ def run_forever(poll_interval: int = POLL_INTERVAL_SECONDS) -> None:
     saver.start()
 
     consecutive_errors = 0
+    last_purge_day = -1
+
     while True:
         start = time.monotonic()
         try:
@@ -118,6 +118,17 @@ def run_forever(poll_interval: int = POLL_INTERVAL_SECONDS) -> None:
             logger.warning(f"Poller error ({consecutive_errors}x): {e} — retry in {backoff}s")
             time.sleep(backoff)
             continue
+
+        # Daily DB purge (run once per calendar day)
+        today = time.localtime().tm_yday
+        if today != last_purge_day:
+            try:
+                deleted = purge_old()
+                if deleted:
+                    logger.info(f"Daily purge: removed {deleted} old GPS rows")
+                last_purge_day = today
+            except Exception as e:
+                logger.warning(f"Purge failed: {e}")
 
         elapsed = time.monotonic() - start
         sleep_for = max(0, poll_interval - elapsed)
