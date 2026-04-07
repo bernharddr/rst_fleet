@@ -76,9 +76,10 @@ class NominatimGeocoder:
             address = data.get("address", {})
             display_name = data.get("display_name", "")
             result = self._extract_location_name(address, display_name)
-            logger.debug(f"OSM ({lat},{lng}) → {result}  [display: {display_name[:60]}]")
+            # Temporarily log at INFO so we can see what's happening
+            logger.info(f"OSM ({lat},{lng}) → '{result}'  addr_keys={list(address.keys())}  display='{display_name[:80]}'")
         except Exception as e:
-            logger.warning(f"OSM geocoding failed for ({lat},{lng}): {e}")
+            logger.warning(f"OSM geocoding FAILED for ({lat},{lng}): {e}")
             result = "LOKASI TIDAK DIKETAHUI"
 
         self._cache[key] = result
