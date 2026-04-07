@@ -6,25 +6,25 @@
 
   {"_section": "=== PABRIK KERTAS ==="},
   {
-    "name": "PINDO DELI 1 - PERAWANG",
-    "lat": 0.5637,
-    "lng": 101.8762,
-    "radius_km": 1.5,
-    "_verify": true
+    "name": "PINDO DELI 1 - KARAWANG",
+    "lat": -6.3225,
+    "lng": 107.3178,
+    "radius_km": 1.0,
+    "_note": "Mill 1, Jl. Prof. Dr. Ir. H. Soetami No.88, Karawang Barat. Source: Wikimapia"
   },
   {
-    "name": "PINDO DELI 2 - PERAWANG",
-    "lat": 0.5701,
-    "lng": 101.8834,
-    "radius_km": 1.5,
-    "_verify": true
+    "name": "PINDO DELI 2 - KARAWANG",
+    "lat": -6.3768,
+    "lng": 107.3423,
+    "radius_km": 2.5,
+    "_note": "Mill 2, Desa Kutamekar, Teluk Ciampel, Karawang Timur (~450 ha). Source: industryabout.com"
   },
   {
     "name": "PINDO DELI 3 - PERAWANG",
-    "lat": 0.5770,
-    "lng": 101.8910,
+    "lat": 0.6200,
+    "lng": 101.5600,
     "radius_km": 1.5,
-    "_verify": true
+    "_note": "Mill 3, Km 26 Jl. Raya Minas-Perawang, Desa Pinang Sebatang, Kab. Siak, Riau"
   },
   {
     "name": "INDAH KIAT PULP & PAPER - SERANG",
@@ -37,50 +37,54 @@
   {"_section": "=== DEPO / GARASI ==="},
   {
     "name": "GARASI ROROTAN",
-    "lat": -6.1021,
-    "lng": 106.9478,
-    "radius_km": 0.5,
-    "_verify": true
+    "lat": -6.1527,
+    "lng": 106.9563,
+    "radius_km": 0.3,
+    "_note": "Centroid Kelurahan Rorotan, Cilincing. Verifikasi lokasi garasi spesifik di Google Maps"
   },
   {
     "name": "DEPO KBN CAKUNG",
-    "lat": -6.1598,
-    "lng": 106.9542,
-    "radius_km": 1.5
+    "lat": -6.1306,
+    "lng": 106.9319,
+    "radius_km": 0.75,
+    "_note": "Jl. Raya Cakung-Cilincing, Sukapura, Cilincing. Source: findlatitudeandlongitude.com"
   },
   {
     "name": "DEPO KBN MARUNDA",
-    "lat": -6.0862,
-    "lng": 106.9912,
-    "radius_km": 1.5
+    "lat": -6.0490,
+    "lng": 106.9500,
+    "radius_km": 1.5,
+    "_note": "Jl. Raya Marunda No.1, Cilincing, Jakarta Utara. 413-ha industrial estate"
   },
   {
     "name": "DEPO MTCON",
-    "lat": -6.1050,
-    "lng": 106.9650,
-    "radius_km": 1.0,
-    "_verify": true
+    "lat": -6.1274,
+    "lng": 106.9306,
+    "radius_km": 0.5,
+    "_note": "PT Masaji Tatanan Kontainer, Jl. Raya Cakung No.15, Semper Timur, Cilincing"
   },
   {
     "name": "DEPO TUNGYA",
-    "lat": -6.1620,
-    "lng": 106.9380,
-    "radius_km": 1.0,
-    "_verify": true
+    "lat": -6.1380,
+    "lng": 106.9600,
+    "radius_km": 0.5,
+    "_note": "PT Tungya Collins Terminal, Jl. Cakung Industri Selatan I No.12, Rorotan, Cilincing"
   },
 
   {"_section": "=== PELABUHAN ==="},
   {
     "name": "PELABUHAN NPCT 1 - KALIBARU",
-    "lat": -6.1054,
-    "lng": 106.9012,
-    "radius_km": 1.5
+    "lat": -6.0941,
+    "lng": 106.9200,
+    "radius_km": 1.0,
+    "_note": "New Priok Container Terminal 1, Jl. Terminal Kalibaru Raya Kav. B No.1, Cilincing"
   },
   {
     "name": "PELABUHAN JICT - TANJUNG PRIOK",
-    "lat": -6.0985,
-    "lng": 106.8823,
-    "radius_km": 1.5
+    "lat": -6.1019,
+    "lng": 106.9042,
+    "radius_km": 1.0,
+    "_note": "Jakarta International Container Terminal, Jl. Sulawesi Ujung No.1, Tanjung Priok. Confidence: high"
   },
   {
     "name": "PELABUHAN TANJUNG PRIOK",
