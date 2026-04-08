@@ -15,6 +15,11 @@ _CACHE_FILE = os.environ.get(
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "geocoding_cache.json")
 )
 
+# Bump this string whenever the geocoding logic changes in a way that makes
+# previously-cached results incorrect (e.g. geofence radius shrunk, keyword
+# removed).  On mismatch the old cache file is discarded automatically.
+_CACHE_VERSION = "3"
+
 # ── Module-level shared state (thread-safe) ───────────────────────────────────
 
 # Single cache shared across all NominatimGeocoder instances and threads
@@ -40,7 +45,16 @@ def _ensure_cache_loaded() -> None:
         try:
             with open(_CACHE_FILE, encoding="utf-8") as f:
                 raw = json.load(f)
-            _cache = {tuple(k.split(",")): (v[0], v[1]) for k, v in raw.items()}
+            if raw.get("_version") != _CACHE_VERSION:
+                logger.warning(
+                    f"Geocoding cache version mismatch "
+                    f"(got {raw.get('_version')!r}, expected {_CACHE_VERSION!r}). "
+                    "Discarding stale cache."
+                )
+                _cache_loaded = True
+                return
+            _cache = {tuple(k.split(",")): (v[0], v[1])
+                      for k, v in raw.items() if k != "_version"}
             logger.info(f"Geocoding cache: {len(_cache)} entries loaded from disk.")
         except Exception as e:
             logger.warning(f"Could not load geocoding cache: {e}")
@@ -50,7 +64,8 @@ def _ensure_cache_loaded() -> None:
 def _save_disk_cache() -> None:
     with _cache_lock:
         try:
-            serializable = {f"{k[0]},{k[1]}": list(v) for k, v in _cache.items()}
+            serializable: dict = {"_version": _CACHE_VERSION}
+            serializable.update({f"{k[0]},{k[1]}": list(v) for k, v in _cache.items()})
             with open(_CACHE_FILE, "w", encoding="utf-8") as f:
                 json.dump(serializable, f, ensure_ascii=False)
         except Exception as e:
@@ -70,7 +85,8 @@ def _osm_throttle() -> None:
 # ── Known places & constants ──────────────────────────────────────────────────
 
 KNOWN_LOCATIONS = {
-    "merak": "PELABUHAN MERAK",
+    # "merak" removed — keyword too broad (matches Jalan Tol Tangerang-Merak).
+    # Pelabuhan Merak detection is handled by the known_places.json geofence (0.5 km radius).
     "bakauheni": "PELABUHAN BAKAUHENI",
     "tanjung priok": "PELABUHAN TANJUNG PRIOK",
     "priok": "PELABUHAN TANJUNG PRIOK",
@@ -145,10 +161,14 @@ class NominatimGeocoder:
         _load_known_places()
 
     def _check_geofence(self, lat: float, lng: float) -> str | None:
+        best_name = None
+        best_dist = float("inf")
         for place in _known_places:
-            if _haversine_km(lat, lng, place["lat"], place["lng"]) <= place.get("radius_km", 1.0):
-                return place["name"].upper()
-        return None
+            dist = _haversine_km(lat, lng, place["lat"], place["lng"])
+            if dist <= place.get("radius_km", 1.0) and dist < best_dist:
+                best_dist = dist
+                best_name = place["name"].upper()
+        return best_name
 
     def _query_osm(self, lat: float, lng: float, zoom: int) -> tuple[dict, str]:
         _osm_throttle()
