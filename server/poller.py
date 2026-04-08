@@ -24,8 +24,9 @@ from state.tracker import load_state, save_state, update_state
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 60  # GFleet API fetch takes ~20s; need 40s+ gap after completion
+POLL_INTERVAL_SECONDS = 180  # 3 minutes; GFleet fetch ~20s, so min sleep = max(40,160) = 160s
 ONCALL_GROUP = "Oncall Trailer"
+JITTER_GRACE_SECONDS = 300   # 5 min grace before confirming a place exit (avoids GPS jitter)
 
 # Shared state — read by WebSocket broadcaster and snapshot generator
 current_vehicles: list[dict] = []
@@ -38,7 +39,8 @@ _vehicle_state: dict = {}
 _geocoder: NominatimGeocoder | None = None
 _oncall_nopols: set[str] = set()
 _post_poll_callback = None  # called after each successful poll; set by app.py
-_vehicle_last_place: dict[str, str | None] = {}  # nopol → current known place
+_vehicle_last_place: dict[str, str | None] = {}   # nopol → confirmed current place
+_vehicle_exit_pending: dict[str, tuple[str, float]] = {}  # nopol → (place, mono time of apparent exit)
 
 
 def set_post_poll_callback(fn) -> None:
@@ -96,14 +98,17 @@ def _init_place_tracking() -> None:
 
 def _update_place_visits(vehicle_list: list[dict]) -> None:
     """
-    For every vehicle, check its geofence, detect entry/exit transitions,
-    update the DB, and write `at_place` / `place_entered_at` onto the dict.
+    Detect place entry/exit transitions with a 5-minute jitter grace period.
+    If a vehicle briefly leaves a known place and returns within 5 minutes,
+    no exit is recorded (treats it as GPS noise).
+    Writes at_place / place_entered_at onto each vehicle dict.
     """
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    # Single DB read to get current open entries (entered_at timestamps)
+    now_mono = time.monotonic()
     active: dict[str, str] = {
         v["nopol"]: v["entered_at"] for v in database.get_active_visits()
     }
+
     for v in vehicle_list:
         nopol = v.get("nopol")
         lat, lng = v.get("lat", 0.0), v.get("lng", 0.0)
@@ -115,20 +120,55 @@ def _update_place_visits(vehicle_list: list[dict]) -> None:
             current_place = check_geofence(lat, lng)
 
         last_place = _vehicle_last_place.get(nopol)
+        pending = _vehicle_exit_pending.get(nopol)  # (place_name, mono_time) or None
 
-        if current_place != last_place:
-            if last_place is not None:
+        if pending:
+            pending_place, pending_time = pending
+            if current_place == pending_place:
+                # Returned to the same place within grace period → GPS jitter, ignore exit
+                del _vehicle_exit_pending[nopol]
+                logger.info(f"[visit] {nopol} returned to {pending_place} — GPS jitter ignored")
+            elif now_mono - pending_time >= JITTER_GRACE_SECONDS:
+                # Grace period expired — confirm the exit
                 database.record_place_exit(nopol, now_iso)
                 active.pop(nopol, None)
-                logger.info(f"[visit] {nopol} LEFT {last_place}")
-            if current_place is not None:
-                database.record_place_entry(nopol, current_place, now_iso)
-                active[nopol] = now_iso
-                logger.info(f"[visit] {nopol} ENTERED {current_place}")
-            _vehicle_last_place[nopol] = current_place
+                logger.info(f"[visit] {nopol} LEFT {pending_place} (confirmed after grace period)")
+                del _vehicle_exit_pending[nopol]
+                _vehicle_last_place[nopol] = None
+                last_place = None
+                # Fall through to handle possible new place entry below
+                if current_place is not None:
+                    database.record_place_entry(nopol, current_place, now_iso)
+                    active[nopol] = now_iso
+                    _vehicle_last_place[nopol] = current_place
+                    logger.info(f"[visit] {nopol} ENTERED {current_place}")
+            # else: still within grace period — keep showing as at pending_place
 
-        v["at_place"] = current_place
-        v["place_entered_at"] = active.get(nopol) if current_place else None
+        else:
+            if current_place != last_place:
+                if last_place is not None and current_place is None:
+                    # Left a known place → start grace period instead of recording exit immediately
+                    _vehicle_exit_pending[nopol] = (last_place, now_mono)
+                    logger.info(f"[visit] {nopol} may have left {last_place} — 5min grace started")
+                elif last_place is not None and current_place is not None:
+                    # Moved directly from one known place to another → confirm immediately
+                    database.record_place_exit(nopol, now_iso)
+                    active.pop(nopol, None)
+                    database.record_place_entry(nopol, current_place, now_iso)
+                    active[nopol] = now_iso
+                    _vehicle_last_place[nopol] = current_place
+                    logger.info(f"[visit] {nopol} LEFT {last_place} → ENTERED {current_place}")
+                elif last_place is None and current_place is not None:
+                    # Entered a known place
+                    database.record_place_entry(nopol, current_place, now_iso)
+                    active[nopol] = now_iso
+                    _vehicle_last_place[nopol] = current_place
+                    logger.info(f"[visit] {nopol} ENTERED {current_place}")
+
+        # During grace period, keep showing as still-at-place so DURASI doesn't flash
+        effective_place = current_place or (pending[0] if pending else None)
+        v["at_place"] = effective_place
+        v["place_entered_at"] = active.get(nopol) if effective_place else None
 
 
 def _poll_once(client: GFleetClient) -> int:

@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 HISTORY_DIR = Path("history")
 REPORT_FILE = Path("fleet_report.html")
-MAX_SNAPSHOTS = 100
+MAX_SNAPSHOTS_IN_HTML = 100   # how many snapshots to embed in the comparison dropdown
+MAX_SNAPSHOT_DAYS = 90        # delete snapshot files older than this many days
 
 ASSIGNMENT_ORDER = [
     # TEK & TEJ groups first — Oncall Trailer on top
@@ -189,6 +190,25 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button onclick="clearTrail()" style="background:#666">Hapus</button>
       <span id="trail-status"></span>
     </div>
+    <div id="trail-scrubber-wrap" style="display:none;margin-top:10px">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <span style="font-size:11px;color:#666">Legenda:</span>
+        <span style="background:#28a745;width:24px;height:6px;display:inline-block;border-radius:3px"></span><span style="font-size:11px">Cepat (&ge;40)</span>
+        <span style="background:#ffc107;width:24px;height:6px;display:inline-block;border-radius:3px"></span><span style="font-size:11px">Pelan (5-40)</span>
+        <span style="background:#dc3545;width:24px;height:6px;display:inline-block;border-radius:3px"></span><span style="font-size:11px">Berhenti (&lt;5)</span>
+      </div>
+      <input type="range" id="trail-scrubber" style="width:100%;accent-color:#1a6b3a"
+        min="0" max="0" value="0" oninput="moveCursor(parseInt(this.value))">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+        <span id="trail-time-start" style="font-size:11px;color:#888"></span>
+        <span id="trail-cursor-info" style="font-size:12px;font-weight:bold;color:#1a6b3a;
+          background:#e8f5e9;padding:2px 8px;border-radius:8px"></span>
+        <span id="trail-time-end" style="font-size:11px;color:#888"></span>
+      </div>
+      <button id="play-btn" onclick="playTrail()"
+        style="margin-top:6px;padding:4px 14px;background:#1a6b3a;color:#fff;
+        border:none;border-radius:5px;cursor:pointer;font-size:12px">&#x25B6; Putar</button>
+    </div>
   </div>
 
   <div id="map-view"></div>
@@ -294,7 +314,7 @@ function render(){
       let locHtml=v.lokasi||'-';
       let cmpLoc='';
       if(prev){cmpLoc=pv?(pv.lokasi||'-'):'<i style="color:#aaa">tidak ada data</i>';}
-      const detil=v.lokasi_detil||'';
+      const detil=v.lokasi_detil||(v.at_place?'Di lokasi':'');
       const detilHtml=detil?`<span style="font-weight:bold;color:#155724">${detil}</span>`:'<span style="color:#ccc">—</span>';
       const speedHtml=v.speed_kmh>0?`<b style="color:#1565c0">${v.speed_kmh} km/h</b>`:`<span style="color:#aaa">0</span>`;
       const odoHtml=v.odo_km>0?v.odo_km.toLocaleString('id-ID',{minimumFractionDigits:1,maximumFractionDigits:1})+' km':'—';
@@ -363,7 +383,8 @@ function updateLiveMarkers(vehicles){
 
 // ── MAP VIEW ──────────────────────────────────────────────
 function _popupHtml(v,grp){
-  const detil=v.lokasi_detil?`<br><b style="color:#155724">${v.lokasi_detil}</b>`:'';
+  const detilTxt=v.lokasi_detil||(v.at_place?'Di lokasi':'');
+  const detil=detilTxt?`<br><b style="color:#155724">${detilTxt}</b>`:'';
   const dur=fmtDur(v.place_entered_at);
   const dwellHtml=dur?`<br><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:8px;font-size:11px;font-weight:bold">&#x23F1; Di sini: ${dur}</span>`:'';
   return `<b>${v.nopol}</b>
@@ -467,6 +488,13 @@ function switchTab(tab){
 }
 
 // ── ROUTE TRAIL ──────────────────────────────────────────
+let trailPoints=[], trailCursor=null, _playInterval=null;
+
+function fmtTime(t){
+  try{return new Date(t).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',
+    day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return t;}
+}
+
 function selectTrailUnit(nopol){
   document.getElementById('trail-nopol').value=nopol;
   document.getElementById('trail-panel').style.display='block';
@@ -477,7 +505,47 @@ function selectTrailUnit(nopol){
 function clearTrail(){
   if(trailLayer){map.removeLayer(trailLayer);trailLayer=null;}
   if(trailDecorator){map.removeLayer(trailDecorator);trailDecorator=null;}
+  if(trailCursor){map.removeLayer(trailCursor);trailCursor=null;}
+  if(_playInterval){clearInterval(_playInterval);_playInterval=null;}
+  trailPoints=[];
   document.getElementById('trail-status').textContent='';
+  document.getElementById('trail-scrubber-wrap').style.display='none';
+  const pb=document.getElementById('play-btn');if(pb)pb.textContent='\u25B6 Putar';
+}
+
+function moveCursor(idx){
+  if(!trailPoints.length)return;
+  idx=Math.max(0,Math.min(idx,trailPoints.length-1));
+  const pt=trailPoints[idx];
+  if(!trailCursor){
+    trailCursor=L.circleMarker([pt.lat,pt.lng],{
+      radius:9,color:'#ff6600',fillColor:'#ff6600',fillOpacity:0.95,weight:2
+    }).addTo(map);
+  }else{
+    trailCursor.setLatLng([pt.lat,pt.lng]);
+  }
+  document.getElementById('trail-scrubber').value=idx;
+  document.getElementById('trail-cursor-info').textContent=
+    `\u23F1 ${fmtTime(pt.gps_time)}  \u2022  ${pt.speed} km/h`;
+}
+
+function playTrail(){
+  const btn=document.getElementById('play-btn');
+  if(_playInterval){
+    clearInterval(_playInterval);_playInterval=null;
+    btn.textContent='\u25B6 Putar';return;
+  }
+  let idx=parseInt(document.getElementById('trail-scrubber').value)||0;
+  if(idx>=trailPoints.length-1)idx=0;
+  btn.textContent='\u23F8 Pause';
+  _playInterval=setInterval(()=>{
+    if(idx>=trailPoints.length-1){
+      clearInterval(_playInterval);_playInterval=null;
+      btn.textContent='\u25B6 Putar';return;
+    }
+    moveCursor(idx++);
+    map.panTo(trailCursor.getLatLng(),{animate:true,duration:0.3});
+  },300);
 }
 
 async function loadTrail(){
@@ -485,7 +553,7 @@ async function loadTrail(){
   const hours=document.getElementById('trail-hours').value;
   if(!nopol)return;
   if(window.location.protocol==='file:'){
-    document.getElementById('trail-status').textContent='⚠ Jejak hanya tersedia di mode server';
+    document.getElementById('trail-status').textContent='\u26A0 Jejak hanya tersedia di mode server';
     return;
   }
   document.getElementById('trail-status').textContent='Memuat...';
@@ -498,31 +566,51 @@ async function loadTrail(){
       document.getElementById('trail-status').textContent=`Tidak ada data jejak (${pts.length} titik)`;
       return;
     }
-    const latlngs=pts.map(p=>[p.lat,p.lng]);
-    trailLayer=L.polyline(latlngs,{color:'#00aa44',weight:4,opacity:0.8}).addTo(map);
+    trailPoints=pts;
+    trailLayer=L.layerGroup().addTo(map);
 
-    // Arrow decorators
-    if(L.PolylineDecorator){
-      trailDecorator=L.polylineDecorator(trailLayer,{
-        patterns:[{
-          offset:'5%', repeat:'8%',
-          symbol:L.Symbol.arrowHead({pixelSize:10,pathOptions:{color:'#00aa44',fillOpacity:1,weight:1}})
-        }]
-      }).addTo(map);
+    // Speed-colored polyline segments
+    for(let i=0;i<pts.length-1;i++){
+      const spd=pts[i].speed||0;
+      const color=spd>=40?'#28a745':spd>=5?'#ffc107':'#dc3545';
+      L.polyline([[pts[i].lat,pts[i].lng],[pts[i+1].lat,pts[i+1].lng]],
+        {color,weight:4,opacity:0.85}).addTo(trailLayer);
     }
 
-    // Start/end markers
-    const first=pts[0],last=pts[pts.length-1];
-    const fmtTime=t=>{try{return new Date(t).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',
-      day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return t;}};
-    L.circleMarker([first.lat,first.lng],{radius:7,color:'#0066cc',fillColor:'#0066cc',fillOpacity:1})
-      .bindPopup(`<b>Start</b><br>${fmtTime(first.gps_time)}<br>Speed: ${first.speed} km/h`).addTo(map);
-    L.circleMarker([last.lat,last.lng],{radius:7,color:'#cc0000',fillColor:'#cc0000',fillOpacity:1})
-      .bindPopup(`<b>End</b><br>${fmtTime(last.gps_time)}<br>Speed: ${last.speed} km/h`).addTo(map);
+    // Stopped-point markers (red dot) with tooltip
+    pts.forEach((pt,i)=>{
+      if((pt.speed||0)<5){
+        L.circleMarker([pt.lat,pt.lng],{radius:5,color:'#dc3545',fillColor:'#dc3545',
+          fillOpacity:0.8,weight:1})
+          .bindTooltip(`${fmtTime(pt.gps_time)}<br>Berhenti`,{direction:'top',sticky:true})
+          .on('click',()=>moveCursor(i))
+          .addTo(trailLayer);
+      }
+    });
 
-    map.fitBounds(trailLayer.getBounds(),{padding:[40,40]});
+    // Start (blue) / End (dark red) markers
+    const first=pts[0],last=pts[pts.length-1];
+    L.circleMarker([first.lat,first.lng],{radius:8,color:'#0066cc',fillColor:'#0066cc',fillOpacity:1})
+      .bindPopup(`<b>Start</b><br>${fmtTime(first.gps_time)}<br>Speed: ${first.speed} km/h`)
+      .addTo(trailLayer);
+    L.circleMarker([last.lat,last.lng],{radius:8,color:'#880000',fillColor:'#880000',fillOpacity:1})
+      .bindPopup(`<b>Terakhir</b><br>${fmtTime(last.gps_time)}<br>Speed: ${last.speed} km/h`)
+      .addTo(trailLayer);
+
+    // Fit map
+    const lats=pts.map(p=>p.lat),lngs=pts.map(p=>p.lng);
+    map.fitBounds([[Math.min(...lats),Math.min(...lngs)],[Math.max(...lats),Math.max(...lngs)]],{padding:[40,40]});
+
+    // Setup scrubber
+    const sc=document.getElementById('trail-scrubber');
+    sc.max=pts.length-1; sc.value=pts.length-1;
+    document.getElementById('trail-time-start').textContent=fmtTime(first.gps_time);
+    document.getElementById('trail-time-end').textContent=fmtTime(last.gps_time);
+    document.getElementById('trail-scrubber-wrap').style.display='block';
+    moveCursor(pts.length-1);
+
     document.getElementById('trail-status').textContent=
-      `${pts.length} titik GPS · ${fmtTime(first.gps_time)} → ${fmtTime(last.gps_time)}`;
+      `${pts.length} titik GPS \u00B7 ${fmtTime(first.gps_time)} \u2192 ${fmtTime(last.gps_time)}`;
   }catch(e){
     document.getElementById('trail-status').textContent='Error: '+e.message;
   }
@@ -546,6 +634,7 @@ def save_and_report(
     fleet_assignments: dict[str, str],
 ) -> None:
     """Save a snapshot and regenerate fleet_report.html."""
+    from datetime import timedelta
     HISTORY_DIR.mkdir(exist_ok=True)
 
     fname = timestamp.strftime("%Y-%m-%d_%H-%M") + ".json"
@@ -553,14 +642,19 @@ def save_and_report(
     with open(HISTORY_DIR / fname, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, ensure_ascii=False, indent=2)
 
-    # Load all snapshots newest-first, prune oldest beyond MAX_SNAPSHOTS
+    # Prune files older than MAX_SNAPSHOT_DAYS (filename starts with YYYY-MM-DD)
+    cutoff = (datetime.now() - timedelta(days=MAX_SNAPSHOT_DAYS)).strftime("%Y-%m-%d")
     all_files = sorted(HISTORY_DIR.glob("*.json"), reverse=True)
-    while len(all_files) > MAX_SNAPSHOTS:
-        all_files[-1].unlink()
-        all_files = all_files[:-1]
-
-    snapshots = []
     for fp in all_files:
+        if fp.stem < cutoff:
+            fp.unlink()
+
+    # Reload file list after pruning
+    all_files = sorted(HISTORY_DIR.glob("*.json"), reverse=True)
+
+    # Only embed the latest MAX_SNAPSHOTS_IN_HTML into the HTML (keeps page size small)
+    snapshots = []
+    for fp in all_files[:MAX_SNAPSHOTS_IN_HTML]:
         try:
             with open(fp, encoding="utf-8") as f:
                 snapshots.append(json.load(f))
@@ -568,7 +662,10 @@ def save_and_report(
             pass
 
     _write_html(snapshots, fleet_assignments)
-    logger.info(f"HTML report saved → {REPORT_FILE}  ({len(snapshots)} snapshots stored)")
+    logger.info(
+        f"HTML report saved → {REPORT_FILE}  "
+        f"({len(all_files)} snapshots on disk, {len(snapshots)} in HTML)"
+    )
 
 
 def _write_html(snapshots: list[dict], fleet_assignments: dict[str, str]) -> None:
