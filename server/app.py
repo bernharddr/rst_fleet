@@ -16,7 +16,6 @@ Usage:
 import asyncio
 import json
 import logging
-import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -176,17 +175,6 @@ def _generate_snapshot():
     logger.info(f"Snapshot generated from poller data ({len(vehicles_data)} vehicles).")
 
 
-def _snapshot_loop(interval_minutes: int = 15):
-    # Wait for poller to complete at least one successful fetch before first snapshot
-    time.sleep(60)
-    while True:
-        try:
-            _generate_snapshot()
-        except Exception as e:
-            logger.error(f"Snapshot generation failed: {e}")
-        time.sleep(interval_minutes * 60)
-
-
 # ── App lifecycle ─────────────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -195,14 +183,12 @@ async def lifespan(app: FastAPI):
     database.init_db()
     logger.info("Database initialized.")
 
+    # Register snapshot generator to run after every successful GPS poll
+    poller.set_post_poll_callback(_generate_snapshot)
+
     # Start GPS poller thread
     poller.start_background()  # uses POLL_INTERVAL_SECONDS default (60s)
-    logger.info("GPS poller started.")
-
-    # Start snapshot generator thread
-    snap_thread = threading.Thread(target=_snapshot_loop, daemon=True, name="snapshot")
-    snap_thread.start()
-    logger.info("Snapshot generator started (every 15 min).")
+    logger.info("GPS poller started (snapshot generated after each fetch).")
 
     # Start WebSocket broadcast loop
     asyncio.create_task(_broadcast_loop(interval=10.0))

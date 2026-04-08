@@ -35,6 +35,13 @@ _state_dirty = False
 _vehicle_state: dict = {}
 _geocoder: NominatimGeocoder | None = None
 _oncall_nopols: set[str] = set()
+_post_poll_callback = None  # called after each successful poll; set by app.py
+
+
+def set_post_poll_callback(fn) -> None:
+    """Register a function to be called after each successful GPS poll."""
+    global _post_poll_callback
+    _post_poll_callback = fn
 
 
 def _load_oncall_nopols() -> set[str]:
@@ -170,6 +177,11 @@ def run_forever(poll_interval: int = POLL_INTERVAL_SECONDS) -> None:
             if n:
                 logger.debug(f"Poller: {n} new GPS rows inserted")
             consecutive_errors = 0
+            if _post_poll_callback is not None:
+                try:
+                    _post_poll_callback()
+                except Exception as cb_err:
+                    logger.warning(f"Post-poll callback failed: {cb_err}")
         except GFleetRateLimitError as e:
             wait = e.retry_after + 5
             logger.warning(f"Rate limited by GFleet — waiting {wait}s before retry")
