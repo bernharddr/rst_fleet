@@ -106,6 +106,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .live-dot{width:8px;height:8px;background:#28a745;border-radius:50%;
     animation:pulse 1.5s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .dwell{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;
+    font-weight:bold;background:#e8f5e9;color:#1b5e20;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -145,6 +147,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <th>ODO (km)</th>
       <th>LOKASI</th>
       <th style="background:#1a6b3a">LOKASI DETIL</th>
+      <th style="background:#0d5c32;white-space:nowrap">&#x23F1;&nbsp;DURASI</th>
       <th id="cmp-col-hdr" style="display:none;min-width:160px">LOKASI SEBELUMNYA</th>
     </tr>
   </thead>
@@ -201,6 +204,14 @@ function fmtTs(iso){
   return d.toLocaleString('id-ID',{timeZone:'Asia/Jakarta',
     day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
+function fmtDur(enteredAt){
+  if(!enteredAt)return'';
+  const mins=Math.round((Date.now()-new Date(enteredAt).getTime())/60000);
+  if(mins<1)return'<1m';
+  if(mins<60)return mins+'m';
+  const h=Math.floor(mins/60),m=mins%60;
+  return m?h+'j '+m+'m':h+'j';
+}
 function stripDist(s){return(s||'').replace(/\s*\([\d.]+km[^)]*\)/,'').trim()}
 function bc(st){
   if(!st)return'b-gps';
@@ -215,7 +226,7 @@ function rc(st){
 
 function render(){
   if(!SNAPSHOTS.length){
-    document.getElementById('tbody').innerHTML='<tr><td colspan="10" style="text-align:center;padding:30px;color:#999">Belum ada data.</td></tr>';
+    document.getElementById('tbody').innerHTML='<tr><td colspan="11" style="text-align:center;padding:30px;color:#999">Belum ada data.</td></tr>';
     return;
   }
   const cur=SNAPSHOTS[0];
@@ -270,7 +281,7 @@ function render(){
     const vs=grps[grp];
     if(!vs||!vs.length)return;
     vs.sort((a,b)=>a.nopol.localeCompare(b.nopol));
-    html+=`<tr class="gr-header"><td colspan="10">&#x1F4CC;&nbsp;${grp} &mdash; ${vs.length} unit</td></tr>`;
+    html+=`<tr class="gr-header"><td colspan="11">&#x1F4CC;&nbsp;${grp} &mdash; ${vs.length} unit</td></tr>`;
     vs.forEach((v,i)=>{
       const pv=pm[v.nopol];
       const locChanged=pv&&stripDist(v.lokasi)!==stripDist(pv.lokasi);
@@ -287,6 +298,8 @@ function render(){
       const detilHtml=detil?`<span style="font-weight:bold;color:#155724">${detil}</span>`:'<span style="color:#ccc">—</span>';
       const speedHtml=v.speed_kmh>0?`<b style="color:#1565c0">${v.speed_kmh} km/h</b>`:`<span style="color:#aaa">0</span>`;
       const odoHtml=v.odo_km>0?v.odo_km.toLocaleString('id-ID',{minimumFractionDigits:1,maximumFractionDigits:1})+' km':'—';
+      const dur=fmtDur(v.place_entered_at);
+      const durHtml=dur?`<span class="dwell">&#x23F1;&nbsp;${dur}</span>`:'<span style="color:#ccc">—</span>';
       html+=`<tr class="${rowCls}">
         <td style="color:#999;font-size:11px">${i+1}</td>
         <td><strong>${v.nopol}</strong></td>
@@ -297,6 +310,7 @@ function render(){
         <td style="white-space:nowrap;font-size:12px">${odoHtml}</td>
         <td>${locHtml}</td>
         <td>${detilHtml}</td>
+        <td>${durHtml}</td>
         ${prev?`<td class="prev-lokasi">${cmpLoc}</td>`:''}
       </tr>`;
     });
@@ -340,11 +354,33 @@ function updateLiveMarkers(vehicles){
     if(!v.lat||!v.lng||v.lat===0&&v.lng===0)return;
     if(liveMarkers[v.nopol]){
       liveMarkers[v.nopol].setLatLng([v.lat,v.lng]);
+      // Refresh popup with updated dwell time
+      const grp=FA[v.nopol]||'Other';
+      liveMarkers[v.nopol].setPopupContent(_popupHtml(v,grp));
     }
   });
 }
 
 // ── MAP VIEW ──────────────────────────────────────────────
+function _popupHtml(v,grp){
+  const detil=v.lokasi_detil?`<br><b style="color:#155724">${v.lokasi_detil}</b>`:'';
+  const dur=fmtDur(v.place_entered_at);
+  const dwellHtml=dur?`<br><span style="background:#e8f5e9;color:#1b5e20;padding:1px 6px;border-radius:8px;font-size:11px;font-weight:bold">&#x23F1; Di sini: ${dur}</span>`:'';
+  return `<b>${v.nopol}</b>
+    <span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;
+      font-size:10px;background:#2c3e50;color:#fff">${grp}</span><br>
+    Status: <b>${v.status||'?'}</b><br>
+    Engine: ${v.engine_on?'<b style="color:green">ON</b>':'OFF'}<br>
+    Volt: ${v.voltage_v}V &nbsp; Speed: ${v.speed_kmh} km/h<br>
+    ODO: ${(v.odo_km||0).toLocaleString('id-ID')} km<br>
+    ${v.lokasi||''}${detil}${dwellHtml}<br>
+    <button onclick="selectTrailUnit('${v.nopol}')"
+      style="margin-top:6px;padding:3px 10px;background:#1a6b3a;color:#fff;
+      border:none;border-radius:4px;cursor:pointer;font-size:11px">
+      &#x1F4CD; Lihat Jejak
+    </button>`;
+}
+
 let map=null, markersLayer=null;
 let trailLayer=null, trailDecorator=null;
 const STATUS_EMOJI={'Jalan':'🚛','Idle':'🚚','Berhenti':'🅿️','GPS Missing':'❓'};
@@ -391,20 +427,7 @@ function renderMap(){
     const m=L.marker([v.lat,v.lng],{icon});
     liveMarkers[v.nopol]=m;
     const grp=FA[v.nopol]||'Other';
-    const detil=v.lokasi_detil?`<br><b style="color:#155724">${v.lokasi_detil}</b>`:'';
-    m.bindPopup(`<b>${v.nopol}</b>
-      <span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;
-        font-size:10px;background:#2c3e50;color:#fff">${grp}</span><br>
-      Status: <b>${v.status}</b><br>
-      Engine: ${v.engine_on?'<b style="color:green">ON</b>':'OFF'}<br>
-      Volt: ${v.voltage_v}V &nbsp; Speed: ${v.speed_kmh} km/h<br>
-      ODO: ${(v.odo_km||0).toLocaleString('id-ID')} km<br>
-      ${v.lokasi||''}${detil}<br>
-      <button onclick="selectTrailUnit('${v.nopol}')"
-        style="margin-top:6px;padding:3px 10px;background:#1a6b3a;color:#fff;
-        border:none;border-radius:4px;cursor:pointer;font-size:11px">
-        &#x1F4CD; Lihat Jejak
-      </button>`);
+    m.bindPopup(_popupHtml(v,grp));
     markersLayer.addLayer(m);
   });
 

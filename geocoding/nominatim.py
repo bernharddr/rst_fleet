@@ -143,6 +143,22 @@ def _haversine_km(lat1, lng1, lat2, lng2) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def check_geofence(lat: float, lng: float) -> str | None:
+    """
+    Return the name of the known place that contains (lat, lng), or None.
+    Thread-safe. No OSM calls. Uses nearest-match within radius.
+    """
+    _load_known_places()
+    best_name = None
+    best_dist = float("inf")
+    for place in _known_places:
+        dist = _haversine_km(lat, lng, place["lat"], place["lng"])
+        if dist <= place.get("radius_km", 1.0) and dist < best_dist:
+            best_dist = dist
+            best_name = place["name"].upper()
+    return best_name
+
+
 # ── Geocoder class ────────────────────────────────────────────────────────────
 
 class NominatimGeocoder:
@@ -161,14 +177,7 @@ class NominatimGeocoder:
         _load_known_places()
 
     def _check_geofence(self, lat: float, lng: float) -> str | None:
-        best_name = None
-        best_dist = float("inf")
-        for place in _known_places:
-            dist = _haversine_km(lat, lng, place["lat"], place["lng"])
-            if dist <= place.get("radius_km", 1.0) and dist < best_dist:
-                best_dist = dist
-                best_name = place["name"].upper()
-        return best_name
+        return check_geofence(lat, lng)
 
     def _query_osm(self, lat: float, lng: float, zoom: int) -> tuple[dict, str]:
         _osm_throttle()

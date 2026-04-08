@@ -18,6 +18,7 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -169,6 +170,8 @@ def _generate_snapshot():
             "lokasi": lokasi,
             "lokasi_detil": lokasi_detil,
             "gps_time": v.get("gps_time", ""),
+            "at_place": v.get("at_place"),
+            "place_entered_at": v.get("place_entered_at"),
         })
 
     save_and_report(vehicles_data, now, fleet_assignments)
@@ -242,6 +245,35 @@ async def get_trail(nopol: str, hours: float = 24):
     hours = max(0.5, min(hours, 720))  # clamp 30 min – 30 days
     trail = database.get_trail(nopol, hours)
     return JSONResponse({"nopol": nopol, "hours": hours, "points": trail})
+
+
+@app.get("/api/visits/active")
+async def get_active_visits():
+    """All vehicles currently inside a known place, with live duration."""
+    visits = database.get_active_visits()
+    now_utc = datetime.now(timezone.utc)
+    for v in visits:
+        try:
+            entry_dt = datetime.fromisoformat(v["entered_at"].replace("Z", "+00:00"))
+            v["duration_minutes"] = round((now_utc - entry_dt).total_seconds() / 60, 1)
+        except Exception:
+            v["duration_minutes"] = None
+    return JSONResponse(visits)
+
+
+@app.get("/api/visits/{nopol}")
+async def get_visit_history(nopol: str, days: int = 30):
+    """Visit history for a single vehicle (default: last 30 days)."""
+    visits = database.get_visit_history(nopol, days)
+    now_utc = datetime.now(timezone.utc)
+    for v in visits:
+        if v.get("exited_at") is None:
+            try:
+                entry_dt = datetime.fromisoformat(v["entered_at"].replace("Z", "+00:00"))
+                v["duration_minutes"] = round((now_utc - entry_dt).total_seconds() / 60, 1)
+            except Exception:
+                pass
+    return JSONResponse(visits)
 
 
 @app.get("/api/stats")

@@ -13,10 +13,12 @@ import json
 import logging
 import threading
 import time
+from datetime import datetime, timezone
 
 from gfleet.auth import GFleetAuthenticator
 from gfleet.client import GFleetClient, GFleetRateLimitError
-from geocoding.nominatim import NominatimGeocoder
+from geocoding.nominatim import NominatimGeocoder, check_geofence
+from server import database
 from server.database import insert_position, purge_old
 from state.tracker import load_state, save_state, update_state
 
@@ -36,6 +38,7 @@ _vehicle_state: dict = {}
 _geocoder: NominatimGeocoder | None = None
 _oncall_nopols: set[str] = set()
 _post_poll_callback = None  # called after each successful poll; set by app.py
+_vehicle_last_place: dict[str, str | None] = {}  # nopol → current known place
 
 
 def set_post_poll_callback(fn) -> None:
@@ -84,6 +87,50 @@ def _geocode_oncall(vehicle_list: list[dict]) -> None:
         logger.warning(f"Oncall Trailer geocoding failed: {e}")
 
 
+def _init_place_tracking() -> None:
+    """On startup, restore in-memory last-place state from open DB visits."""
+    for visit in database.get_active_visits():
+        _vehicle_last_place[visit["nopol"]] = visit["place_name"]
+    logger.info(f"Restored {len(_vehicle_last_place)} active place visits from DB.")
+
+
+def _update_place_visits(vehicle_list: list[dict]) -> None:
+    """
+    For every vehicle, check its geofence, detect entry/exit transitions,
+    update the DB, and write `at_place` / `place_entered_at` onto the dict.
+    """
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Single DB read to get current open entries (entered_at timestamps)
+    active: dict[str, str] = {
+        v["nopol"]: v["entered_at"] for v in database.get_active_visits()
+    }
+    for v in vehicle_list:
+        nopol = v.get("nopol")
+        lat, lng = v.get("lat", 0.0), v.get("lng", 0.0)
+        if not nopol:
+            continue
+
+        current_place: str | None = None
+        if lat != 0.0 or lng != 0.0:
+            current_place = check_geofence(lat, lng)
+
+        last_place = _vehicle_last_place.get(nopol)
+
+        if current_place != last_place:
+            if last_place is not None:
+                database.record_place_exit(nopol, now_iso)
+                active.pop(nopol, None)
+                logger.info(f"[visit] {nopol} LEFT {last_place}")
+            if current_place is not None:
+                database.record_place_entry(nopol, current_place, now_iso)
+                active[nopol] = now_iso
+                logger.info(f"[visit] {nopol} ENTERED {current_place}")
+            _vehicle_last_place[nopol] = current_place
+
+        v["at_place"] = current_place
+        v["place_entered_at"] = active.get(nopol) if current_place else None
+
+
 def _poll_once(client: GFleetClient) -> int:
     """Fetch all vehicles, insert new positions. Returns number of new rows inserted."""
     global _state_dirty, _vehicle_state
@@ -128,6 +175,9 @@ def _poll_once(client: GFleetClient) -> int:
     # Geocode Oncall Trailer vehicles immediately (OSM + disk cache)
     _geocode_oncall(new_vehicle_list)
 
+    # Detect place entries/exits and annotate vehicles with at_place/place_entered_at
+    _update_place_visits(new_vehicle_list)
+
     with current_vehicles_lock:
         current_vehicles.clear()
         current_vehicles.extend(new_vehicle_list)
@@ -162,6 +212,9 @@ def run_forever(poll_interval: int = POLL_INTERVAL_SECONDS) -> None:
 
     auth = GFleetAuthenticator()
     client = GFleetClient(auth)
+
+    # Restore place-visit state from DB (handles restarts gracefully)
+    _init_place_tracking()
 
     # State saver thread
     saver = threading.Thread(target=_save_state_periodically, daemon=True)

@@ -1,8 +1,9 @@
 """
-SQLite database for GPS position history.
+SQLite database for GPS position history and place visit tracking.
 
 Schema:
   gps_positions(id, nopol, lat, lng, speed, odo, ext_voltage, gps_time, inserted_at)
+  place_visits(id, nopol, place_name, entered_at, exited_at, duration_minutes)
 
 Deduplication: only insert when gps_time changes, or >10min heartbeat.
 Retention: auto-purge rows older than 90 days.
@@ -53,6 +54,17 @@ def init_db() -> None:
                 ON gps_positions (nopol, gps_time DESC);
             CREATE INDEX IF NOT EXISTS idx_inserted
                 ON gps_positions (inserted_at DESC);
+
+            CREATE TABLE IF NOT EXISTS place_visits (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                nopol            TEXT NOT NULL,
+                place_name       TEXT NOT NULL,
+                entered_at       TEXT NOT NULL,
+                exited_at        TEXT,
+                duration_minutes REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_pv_nopol
+                ON place_visits (nopol, entered_at DESC);
         """)
         conn.commit()
 
@@ -159,3 +171,65 @@ def get_db_stats() -> dict:
             " FROM gps_positions"
         ).fetchone()
     return dict(row) if row else {}
+
+
+# ── Place visit tracking ───────────────────────────────────────────────────────
+
+def record_place_entry(nopol: str, place_name: str, entered_at: str) -> None:
+    """Open a new visit record for this vehicle at a known place."""
+    with _lock:
+        _get_conn().execute(
+            "INSERT INTO place_visits (nopol, place_name, entered_at) VALUES (?,?,?)",
+            (nopol, place_name, entered_at),
+        )
+        _get_conn().commit()
+
+
+def record_place_exit(nopol: str, exited_at: str) -> None:
+    """Close the open visit for this vehicle and compute duration."""
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT id, entered_at FROM place_visits WHERE nopol=? AND exited_at IS NULL"
+            " ORDER BY entered_at DESC LIMIT 1",
+            (nopol,),
+        ).fetchone()
+        if row:
+            try:
+                entry_dt = datetime.fromisoformat(row["entered_at"].replace("Z", "+00:00"))
+                exit_dt = datetime.fromisoformat(exited_at.replace("Z", "+00:00"))
+                duration = round((exit_dt - entry_dt).total_seconds() / 60, 1)
+            except Exception:
+                duration = None
+            conn.execute(
+                "UPDATE place_visits SET exited_at=?, duration_minutes=? WHERE id=?",
+                (exited_at, duration, row["id"]),
+            )
+            conn.commit()
+
+
+def get_active_visits() -> list[dict]:
+    """Return all vehicles currently inside a known place (no exited_at)."""
+    with _lock:
+        rows = _get_conn().execute(
+            "SELECT nopol, place_name, entered_at"
+            " FROM place_visits WHERE exited_at IS NULL"
+            " ORDER BY entered_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_visit_history(nopol: str, days: int = 30) -> list[dict]:
+    """Return visit history for a single vehicle, newest first."""
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=days)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _lock:
+        rows = _get_conn().execute(
+            "SELECT nopol, place_name, entered_at, exited_at, duration_minutes"
+            " FROM place_visits"
+            " WHERE nopol=? AND entered_at >= ?"
+            " ORDER BY entered_at DESC",
+            (nopol, cutoff),
+        ).fetchall()
+    return [dict(r) for r in rows]
