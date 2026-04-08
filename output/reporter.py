@@ -176,8 +176,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <div id="trail-panel">
     <h3>&#x1F4CD; Tampilkan Jejak Rute</h3>
-    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
       <select id="trail-nopol"><option value="">— pilih unit —</option></select>
+      <label style="font-size:12px;cursor:pointer">
+        <input type="radio" name="trail-mode" value="hours" checked onchange="toggleTrailMode()"> Terakhir
+      </label>
       <select id="trail-hours">
         <option value="1">1 jam</option>
         <option value="6">6 jam</option>
@@ -185,7 +188,16 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         <option value="72">3 hari</option>
         <option value="168">7 hari</option>
         <option value="720">30 hari</option>
+        <option value="2160">3 bulan</option>
       </select>
+      <label style="font-size:12px;cursor:pointer">
+        <input type="radio" name="trail-mode" value="range" onchange="toggleTrailMode()"> Rentang Tanggal
+      </label>
+      <span id="trail-date-range" style="display:none;align-items:center;gap:4px">
+        <input type="date" id="trail-from" style="padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px">
+        <span style="font-size:12px">s/d</span>
+        <input type="date" id="trail-to" style="padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px">
+      </span>
       <button onclick="loadTrail()">Tampilkan</button>
       <button onclick="clearTrail()" style="background:#666">Hapus</button>
       <span id="trail-status"></span>
@@ -548,18 +560,45 @@ function playTrail(){
   },300);
 }
 
+function toggleTrailMode(){
+  const mode=document.querySelector('input[name="trail-mode"]:checked').value;
+  const rangeEl=document.getElementById('trail-date-range');
+  const hoursEl=document.getElementById('trail-hours');
+  if(mode==='range'){
+    rangeEl.style.display='inline-flex';
+    hoursEl.style.display='none';
+    // Default to today if empty
+    const today=new Date().toISOString().slice(0,10);
+    if(!document.getElementById('trail-to').value) document.getElementById('trail-to').value=today;
+    if(!document.getElementById('trail-from').value) document.getElementById('trail-from').value=today;
+  } else {
+    rangeEl.style.display='none';
+    hoursEl.style.display='';
+  }
+}
+
 async function loadTrail(){
   const nopol=document.getElementById('trail-nopol').value;
-  const hours=document.getElementById('trail-hours').value;
   if(!nopol)return;
   if(window.location.protocol==='file:'){
     document.getElementById('trail-status').textContent='\u26A0 Jejak hanya tersedia di mode server';
     return;
   }
+  const mode=document.querySelector('input[name="trail-mode"]:checked').value;
   document.getElementById('trail-status').textContent='Memuat...';
   clearTrail();
+  let url;
+  if(mode==='range'){
+    const from=document.getElementById('trail-from').value;
+    const to=document.getElementById('trail-to').value;
+    if(!from||!to){document.getElementById('trail-status').textContent='Pilih tanggal dari dan sampai';return;}
+    url=`/api/trail/${encodeURIComponent(nopol)}?from_date=${from}&to_date=${to}`;
+  } else {
+    const hours=document.getElementById('trail-hours').value;
+    url=`/api/trail/${encodeURIComponent(nopol)}?hours=${hours}`;
+  }
   try{
-    const res=await fetch(`/api/trail/${encodeURIComponent(nopol)}?hours=${hours}`);
+    const res=await fetch(url);
     const data=await res.json();
     const pts=data.points||[];
     if(pts.length<2){

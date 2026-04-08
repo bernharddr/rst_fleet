@@ -243,14 +243,23 @@ async def get_vehicles():
 
 
 @app.get("/api/trail/{nopol}")
-async def get_trail(nopol: str, hours: float = 24):
+async def get_trail(
+    nopol: str,
+    hours: float = 24,
+    from_date: str | None = None,
+    to_date: str | None = None,
+):
     """
     GPS trail for a single vehicle.
-    ?hours=24   → last 24 hours (default)
-    ?hours=168  → last 7 days
-    ?hours=720  → last 30 days
+    ?hours=24                                  → last 24 hours (default)
+    ?from_date=YYYY-MM-DD&to_date=YYYY-MM-DD   → explicit date range (00:00–23:59 UTC)
     """
-    hours = max(0.5, min(hours, 720))  # clamp 30 min – 30 days
+    if from_date and to_date:
+        from_iso = from_date + "T00:00:00Z"
+        to_iso   = to_date   + "T23:59:59Z"
+        trail = database.get_trail(nopol, from_iso=from_iso, to_iso=to_iso)
+        return JSONResponse({"nopol": nopol, "from": from_iso, "to": to_iso, "points": trail})
+    hours = max(0.5, min(hours, 8760))  # clamp 30 min – 1 year
     trail = database.get_trail(nopol, hours)
     return JSONResponse({"nopol": nopol, "hours": hours, "points": trail})
 

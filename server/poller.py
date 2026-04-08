@@ -24,7 +24,7 @@ from state.tracker import load_state, save_state, update_state
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 180  # 3 minutes; GFleet fetch ~20s, so min sleep = max(40,160) = 160s
+POLL_INTERVAL_SECONDS = 100  # GFleet fetch ~20s, so min sleep = max(40,80) = 80s
 ONCALL_GROUP = "Oncall Trailer"
 JITTER_GRACE_SECONDS = 300   # 5 min grace before confirming a place exit (avoids GPS jitter)
 

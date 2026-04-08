@@ -119,19 +119,38 @@ def insert_position(
     return True
 
 
-def get_trail(nopol: str, hours: float = 24) -> list[dict]:
-    """Return GPS trail for a vehicle within the last N hours."""
-    since = (
-        datetime.now(timezone.utc) - timedelta(hours=hours)
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with _lock:
-        rows = _get_conn().execute(
-            "SELECT lat, lng, speed, odo, gps_time, inserted_at"
-            " FROM gps_positions"
-            " WHERE nopol=? AND inserted_at >= ?"
-            " ORDER BY gps_time ASC",
-            (nopol, since),
-        ).fetchall()
+def get_trail(
+    nopol: str,
+    hours: float = 24,
+    from_iso: str | None = None,
+    to_iso: str | None = None,
+) -> list[dict]:
+    """
+    Return GPS trail for a vehicle.
+    If from_iso/to_iso are given, query that explicit range.
+    Otherwise query the last `hours` hours from now.
+    """
+    if from_iso and to_iso:
+        with _lock:
+            rows = _get_conn().execute(
+                "SELECT lat, lng, speed, odo, gps_time, inserted_at"
+                " FROM gps_positions"
+                " WHERE nopol=? AND gps_time >= ? AND gps_time <= ?"
+                " ORDER BY gps_time ASC",
+                (nopol, from_iso, to_iso),
+            ).fetchall()
+    else:
+        since = (
+            datetime.now(timezone.utc) - timedelta(hours=hours)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with _lock:
+            rows = _get_conn().execute(
+                "SELECT lat, lng, speed, odo, gps_time, inserted_at"
+                " FROM gps_positions"
+                " WHERE nopol=? AND inserted_at >= ?"
+                " ORDER BY gps_time ASC",
+                (nopol, since),
+            ).fetchall()
     return [dict(r) for r in rows]
 
 
