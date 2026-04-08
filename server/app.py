@@ -196,7 +196,7 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized.")
 
     # Start GPS poller thread
-    poller.start_background(poll_interval=10)
+    poller.start_background()  # uses POLL_INTERVAL_SECONDS default (60s)
     logger.info("GPS poller started.")
 
     # Start snapshot generator thread
