@@ -111,11 +111,13 @@ def _generate_snapshot():
     vehicle_state = load_state()
     fleet_assignments = load_fleet_assignments()
 
-    # Geocode all unique non-zero coordinates (uses disk cache, minimal OSM calls)
+    # Geocode coordinates not already resolved by the poller.
+    # Oncall Trailer vehicles already have lokasi set by the poller after each fetch;
+    # for all others, batch_geocode uses the disk cache (mostly instant cache hits).
     geocoder = NominatimGeocoder()
     coords = [
         (v["lat"], v["lng"]) for v in vehicles_raw
-        if v["lat"] != 0.0 or v["lng"] != 0.0
+        if (v["lat"] != 0.0 or v["lng"] != 0.0) and v.get("lokasi") is None
     ]
     geo_by_coord = geocoder.batch_geocode(coords)
 
@@ -142,7 +144,12 @@ def _generate_snapshot():
             else:
                 status = "Berhenti"
 
-            area, lokasi_detil = geo_by_coord.get((lat, lng), ("LOKASI TIDAK DIKETAHUI", None))
+            # Use pre-geocoded lokasi from poller (Oncall Trailer) if available,
+            # otherwise fall back to batch_geocode result (disk cache for others)
+            if v.get("lokasi") is not None:
+                area, lokasi_detil = v["lokasi"], v.get("lokasi_detil")
+            else:
+                area, lokasi_detil = geo_by_coord.get((lat, lng), ("LOKASI TIDAK DIKETAHUI", None))
             if prev and moved:
                 arrow = bearing_arrow(prev["lat"], prev["lng"], lat, lng)
                 prev_time_str = _format_prev_time(prev.get("time", ""))

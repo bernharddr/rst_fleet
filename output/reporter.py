@@ -390,8 +390,11 @@ function renderMap(){
     });
     const m=L.marker([v.lat,v.lng],{icon});
     liveMarkers[v.nopol]=m;
+    const grp=FA[v.nopol]||'Other';
     const detil=v.lokasi_detil?`<br><b style="color:#155724">${v.lokasi_detil}</b>`:'';
-    m.bindPopup(`<b>${v.nopol}</b><br>
+    m.bindPopup(`<b>${v.nopol}</b>
+      <span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;
+        font-size:10px;background:#2c3e50;color:#fff">${grp}</span><br>
       Status: <b>${v.status}</b><br>
       Engine: ${v.engine_on?'<b style="color:green">ON</b>':'OFF'}<br>
       Volt: ${v.voltage_v}V &nbsp; Speed: ${v.speed_kmh} km/h<br>
