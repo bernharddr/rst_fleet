@@ -186,6 +186,14 @@ async def lifespan(app: FastAPI):
     database.init_db()
     logger.info("Database initialized.")
 
+    # Backfill place visits from existing GPS history (runs once when table is empty)
+    from geocoding.nominatim import check_geofence
+    n = database.backfill_place_visits(check_geofence)
+    if n:
+        logger.info(f"Backfilled {n} place visit records from GPS history.")
+    else:
+        logger.info("Place visits table already populated — skipping backfill.")
+
     # Register snapshot generator to run after every successful GPS poll
     poller.set_post_poll_callback(_generate_snapshot)
 

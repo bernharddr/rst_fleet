@@ -233,3 +233,73 @@ def get_visit_history(nopol: str, days: int = 30) -> list[dict]:
             (nopol, cutoff),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def backfill_place_visits(geofence_fn) -> int:
+    """
+    Retroactively detect place visits from existing gps_positions history.
+    Only runs when place_visits is empty (i.e. first startup with new code).
+    geofence_fn: callable(lat, lng) -> str | None  (check_geofence from nominatim)
+    Returns the number of visit records inserted.
+    """
+    with _lock:
+        existing = _get_conn().execute(
+            "SELECT COUNT(*) FROM place_visits"
+        ).fetchone()[0]
+    if existing > 0:
+        return 0  # Already populated — skip
+
+    # Process one vehicle at a time to keep memory usage low
+    with _lock:
+        nopols = [
+            r[0] for r in _get_conn().execute(
+                "SELECT DISTINCT nopol FROM gps_positions ORDER BY nopol"
+            ).fetchall()
+        ]
+
+    visits: list[tuple] = []
+
+    for nopol in nopols:
+        with _lock:
+            positions = _get_conn().execute(
+                "SELECT lat, lng, gps_time FROM gps_positions"
+                " WHERE nopol=? ORDER BY gps_time ASC",
+                (nopol,),
+            ).fetchall()
+
+        current_place: str | None = None
+        entry_time: str | None = None
+
+        for pos in positions:
+            lat, lng, gps_time = pos["lat"], pos["lng"], pos["gps_time"]
+            if lat == 0.0 and lng == 0.0:
+                continue
+            place = geofence_fn(lat, lng)
+            if place != current_place:
+                if current_place is not None:
+                    # Close the previous visit
+                    try:
+                        dt_in = datetime.fromisoformat(entry_time.replace("Z", "+00:00"))
+                        dt_out = datetime.fromisoformat(gps_time.replace("Z", "+00:00"))
+                        dur = round((dt_out - dt_in).total_seconds() / 60, 1)
+                    except Exception:
+                        dur = None
+                    visits.append((nopol, current_place, entry_time, gps_time, dur))
+                entry_time = gps_time if place is not None else None
+                current_place = place
+
+        # Vehicle still at a place at end of history → leave open
+        if current_place is not None and entry_time:
+            visits.append((nopol, current_place, entry_time, None, None))
+
+    if visits:
+        with _lock:
+            _get_conn().executemany(
+                "INSERT INTO place_visits"
+                " (nopol, place_name, entered_at, exited_at, duration_minutes)"
+                " VALUES (?,?,?,?,?)",
+                visits,
+            )
+            _get_conn().commit()
+
+    return len(visits)
